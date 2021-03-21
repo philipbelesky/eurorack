@@ -210,6 +210,9 @@ void RampExtractor::Process(
         train_phase += frequency_;
         if (train_phase >= 1.0f) {
           train_phase -= 1.0f;
+          if (p.total_duration > audio_rate_period_hysteresis_ * ar_scalar) {
+            train_phase = 1.0f;
+          }
         }
         *ramp++ = train_phase;
       } while (
