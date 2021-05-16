@@ -428,7 +428,7 @@ inline void ChainState::BindLocalParameters(
     const ParameterBinding& m = binding_[i];
     segment_generator[m.generator].set_segment_parameters(
         m.destination,
-        cv_slider(block, m.source, configs[i]),
+        cv_slider(block, m.source, configs[m.source]),
         block.pot[m.source],
         block.cv[m.source],
         block.slider[m.source]);
