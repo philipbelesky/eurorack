@@ -164,8 +164,15 @@ void Ui::Poll() {
             seg_config[i] &= ~0x0c00; // reset range bits
             if (slider < 0.25) {
               seg_config[i] |= 0x0800;
-            } else if (slider < 0.75) { // high is default in ouroboros
+            } else if ((i == 0 && slider < 0.75) || (i > 0 && slider > 0.75)) {
+              // high is default (0) in ouroboros root; otherwise middle is default
               seg_config[i] |= 0x0400;
+            }
+            if (i == 0 && seg_config[i] != old_flags) {
+              for (uint8_t j=1; j < kNumChannels; j++) {
+                // Reset all channels if root range changes
+                seg_config[j] &= ~0x0c00;
+              }
             }
             break;
           }
