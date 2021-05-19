@@ -538,19 +538,19 @@ void ChainState::PollSwitches() {
   // includes polarity/retrigger control (which use the same bit).
   if (index_ == size_ - 1) {
     request_.request = REQUEST_NONE;
-    size_t switch_index = 0;
     size_t first_pressed = kMaxNumChannels;
 
     for (size_t i = 0; i < size_; ++i) {
       ChannelBitmask switch_pressed = switch_pressed_[i];
+      size_t switch_index = i * kNumChannels;
       if (switch_pressed == 0xff) {
         // Switches are being locally processed; suspend
         fill(
             &switch_press_time_[switch_index],
             &switch_press_time_[switch_index + kNumChannels],
             -1);
-        switch_index += kNumChannels;
-      } else {
+      } else if (switch_pressed || switch_pressed != last_switch_pressed_[i]) {
+        last_switch_pressed_[i] = switch_pressed;
         for (size_t j = 0; j < kNumChannels; ++j) {
           if (switch_pressed & 1) {
             if (switch_press_time_[switch_index] != -1) {

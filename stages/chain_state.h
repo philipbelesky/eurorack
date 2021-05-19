@@ -326,6 +326,7 @@ class ChainState {
   LoopStatus loop_status_[kNumChannels];
   uint8_t attenuate_;
 
+  ChannelBitmask last_switch_pressed_[kMaxChainSize];
   ChannelBitmask switch_pressed_[kMaxChainSize];
   ChannelBitmask input_patched_[kMaxChainSize];
 

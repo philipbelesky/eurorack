@@ -97,13 +97,11 @@ void Ui::Poll() {
 
   // Forward presses information to chain state
   ChainState::ChannelBitmask pressed = 0;
-  //if (multimode == MULTI_MODE_STAGES || multimode == MULTI_MODE_STAGES_SLOW_LFO) {
-    for (int i = 0; i < kNumSwitches; ++i) {
-      if (switches_.pressed(i)) {
-        pressed |= 1 << i;
-      }
+  for (int i = 0; i < kNumSwitches; ++i) {
+    if (switches_.pressed(i)) {
+      pressed |= 1 << i;
     }
-  //}
+  }
   // This should get overwritten by SuspendSwitches if a mode switch or local
   // prop change is happening, so must happen first.
   chain_state_->set_local_switch_pressed(pressed);
