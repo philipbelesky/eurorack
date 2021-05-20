@@ -157,16 +157,18 @@ class SegmentGenerator {
     i += segment_configuration.loop ? 1 : 0;
     int type = int(segment_configuration.type);
     i += type * 4;
-    ProcessFn new_process_fn = (settings_->state().multimode == MULTI_MODE_STAGES_ADVANCED
+    ProcessFn new_process_fn =
+        (settings_->state().multimode == MULTI_MODE_STAGES_ADVANCED
         ? advanced_process_fn_table_ : process_fn_table_)[i];
     if (new_process_fn != process_fn_
         || segments_[0].range != segment_configuration.range) {
-      reset_ramp_extractor_ = true;
+      ramp_extractor_.Reset();
     }
     process_fn_ = new_process_fn;
     segments_[0].range = segment_configuration.range;
     segments_[0].bipolar = segment_configuration.bipolar;
-    segments_[0].retrig = (segment_configuration.type != segment::TYPE_RAMP) || !segment_configuration.bipolar;
+    segments_[0].retrig = (segment_configuration.type != segment::TYPE_RAMP)
+        || !segment_configuration.bipolar;
     num_segments_ = 1;
   }
 

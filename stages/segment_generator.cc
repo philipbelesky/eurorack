@@ -468,31 +468,17 @@ inline Ratio calc_ratio(int n, int d) {
   return (Ratio) { float(n) / float(d) - 1e-06f, d };
 }
 
-Ratio divider_ratios[] = {
-  calc_ratio(1, 4),
-  calc_ratio(1, 3),
-  calc_ratio(1, 2),
-  calc_ratio(1, 1),
-  calc_ratio(2, 1),
-  calc_ratio(3, 1),
-  calc_ratio(4, 1),
-};
-
-Ratio divider_ratios_slow[] = {
-  calc_ratio(1, 32),
+const Ratio divider_ratios[] = {
+  calc_ratio(1, 32), // slow start: 0
   calc_ratio(1, 16),
   calc_ratio(1, 8),
   calc_ratio(1, 7),
   calc_ratio(1, 6),
   calc_ratio(1, 5),
-  calc_ratio(1, 4),
+  calc_ratio(1, 4), // default start: 6
   calc_ratio(1, 3),
   calc_ratio(1, 2),
-  calc_ratio(1, 1),
-};
-
-Ratio divider_ratios_fast[] = {
-  calc_ratio(1, 1),
+  calc_ratio(1, 1), // fast start: 9
   calc_ratio(2, 1),
   calc_ratio(3, 1),
   calc_ratio(4, 1),
@@ -504,29 +490,17 @@ Ratio divider_ratios_fast[] = {
   calc_ratio(16, 1),
 };
 
+const uint8_t divider_ratios_start[] = {6, 0, 9};
+const uint8_t num_divider_ratios[] = {7, 10, 10};
+
 void SegmentGenerator::ProcessTapLFO(
     const GateFlags* gate_flags, SegmentGenerator::Output* out, size_t size) {
   float ramp[12];
-  Ratio r;
-  switch (segments_[0].range) {
-    case segment::RANGE_DEFAULT:
-      r = function_quantizer_.Lookup(
-          divider_ratios, parameters_[0].primary * 1.03f, 7);
-      break;
-    case segment::RANGE_SLOW:
-      r = function_quantizer_.Lookup(
-          divider_ratios_slow, parameters_[0].primary * 1.03f, 10);
-      break;
-    case segment::RANGE_FAST:
-      r = function_quantizer_.Lookup(
-          divider_ratios_fast, parameters_[0].primary * 1.03f, 10);
-      break;
-  }
+  uint8_t range = segments_[0].range;
+  Ratio r = function_quantizer_.Lookup(
+    divider_ratios + divider_ratios_start[range], parameters_[0].primary * 1.03f, num_divider_ratios[range]
+  );
 
-  if (reset_ramp_extractor_) {
-    ramp_extractor_.Reset();
-    reset_ramp_extractor_ = false;
-  }
   ramp_extractor_.Process(r, gate_flags, ramp, size);
   for (size_t i = 0; i < size; ++i) {
     out[i].phase = ramp[i];
