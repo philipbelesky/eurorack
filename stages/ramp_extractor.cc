@@ -88,15 +88,25 @@ void RampExtractor::Reset() {
 
 float RampExtractor::ComputeAveragePulseWidth(float tolerance) const {
   float sum = 0.0f;
-  for (size_t i = 0; i < kHistorySize; ++i) {
-    if (!IsWithinTolerance(history_[i].pulse_width,
-                           history_[current_pulse_].pulse_width,
-                           tolerance)) {
-      return 0.0f;
+  float fHistory = static_cast<float>(kHistorySize);
+  float cpw = history_[current_pulse_].pulse_width;
+  if (average_pulse_width_ >= 0.0f) {
+    if (IsWithinTolerance(average_pulse_width_, cpw, tolerance)) {
+      return (average_pulse_width_ * (fHistory - 1) + cpw) / fHistory;
     }
-    sum += history_[i].pulse_width;
+    return 0.0f;
+  } else {
+    for (size_t i = 0; i < kHistorySize; ++i) {
+      if (!IsWithinTolerance(history_[i].pulse_width,
+                            cpw,
+                            tolerance)) {
+        return 0.0f;
+      }
+      sum += history_[i].pulse_width;
+    }
+    return sum / fHistory;
   }
-  return sum / static_cast<float>(kHistorySize);
+
 }
 
 float RampExtractor::PredictNextPeriod() {
