@@ -140,7 +140,7 @@ void RampExtractor::Process(
 
   float train_phase = train_phase_;
   float max_train_phase = max_train_phase_;
-  float ar_scalar = ratio.ratio > 1.0f ? ratio.ratio : 1.0f;
+  float ar_threshold = audio_rate_period_hysteresis_ * (ratio.ratio > 1.0f ? ratio.ratio : 1.0f);
   GateFlags flags = *gate_flags++;
   while (size) {
     // We are done with the previous pulse.
@@ -156,7 +156,7 @@ void RampExtractor::Process(
         reset_interval_ = 4.0f * p.total_duration;
       } else {
         float period = static_cast<float>(p.total_duration);
-        if (period <= audio_rate_period_hysteresis_ * ar_scalar) {
+        if (period <= ar_threshold) {
           audio_rate_ = true;
           audio_rate_period_hysteresis_ = audio_rate_period_ * 1.1f;
 
@@ -181,10 +181,8 @@ void RampExtractor::Process(
           // PW has been consistent over the past pulses.
           p.pulse_width = static_cast<float>(p.on_duration) / \
               static_cast<float>(p.total_duration);
-          // We only need to do this when the cur pule pw would actually change something
-          if (!IsWithinTolerance(average_pulse_width_, p.pulse_width, kPulseWidthTolerance)) {
-              average_pulse_width_ = ComputeAveragePulseWidth(kPulseWidthTolerance);
-          } else if (p.on_duration < 32) {
+          average_pulse_width_ = ComputeAveragePulseWidth(kPulseWidthTolerance);
+          if (p.on_duration < 32) {
             average_pulse_width_ = 0.0f;
           }
           frequency_ = target_frequency_ = 1.0f / PredictNextPeriod();
@@ -210,18 +208,23 @@ void RampExtractor::Process(
       history_[current_pulse_].total_duration = 0;
     }
     Pulse& p = history_[current_pulse_];
+    uint32_t& total_duration = p.total_duration;
     if (audio_rate_) {
       do {
-        ++p.total_duration;
+        ++total_duration;
         if (flags & GATE_FLAG_FALLING) {
-          p.on_duration = p.total_duration - 1;
+          p.on_duration = total_duration - 1;
         }
         ONE_POLE(frequency_, target_frequency_, lp_coefficient_);
         train_phase += frequency_;
         if (train_phase >= 1.0f) {
           train_phase -= 1.0f;
-          if (p.total_duration > audio_rate_period_hysteresis_ * ar_scalar) {
-            train_phase = 1.0f;
+          if (total_duration > ar_threshold) {
+            // Setting phase and freq to 0 makes it so we don't have to keep executing this
+            // inner conditional over and over until we get a gate, which matters since this is
+            // such a tight loop.
+            train_phase = 0.0f;
+            frequency_ = target_frequency_ = 0.0f;
           }
         }
         *ramp++ = train_phase;
@@ -230,9 +233,9 @@ void RampExtractor::Process(
           && !((flags = *gate_flags++) & GATE_FLAG_RISING));
     } else {
       do {
-        ++p.total_duration;
+        ++total_duration;
         if (flags & GATE_FLAG_FALLING) {
-          p.on_duration = p.total_duration - 1;
+          p.on_duration = total_duration - 1;
           if (average_pulse_width_ > 0.0f) {
             float t_on = static_cast<float>(p.on_duration);
             float next = max_train_phase - static_cast<float>(reset_counter_) + 1.0f;
