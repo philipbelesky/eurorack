@@ -288,6 +288,7 @@ void ChainState::Configure(
   segment::Configuration configuration[kMaxNumChannels];
 
   attenuate_ = 0;
+  process_cv_ = 0;
 
   for (size_t i = 0; i < kNumChannels; ++i) {
     size_t channel = local_channel_index(i);
@@ -359,6 +360,7 @@ void ChainState::Configure(
       set_loop_status(i, 0, last_loop);
     }
     attenuate_ |= segment_generator[i].needs_attenuation() << i;
+    process_cv_ |= segment_generator[i].needs_cv_preprocessing() << i;
   }
   tx_last_loop_ = last_loop;
   tx_last_patched_channel_ = last_patched_channel;
@@ -403,7 +405,10 @@ inline void ChainState::UpdateLocalPotCvSlider(
   const uint16_t *configs = settings.state().segment_configuration;
   for (size_t i = 0; i < kNumChannels; ++i) {
     ChannelState* s = local_channel(i);
-    s->cv_slider = cv_slider(block, i, configs[i]) * 16384.0f + 32768.0f;
+    float cvs = process_cv_ >> i & 1
+        ? cv_slider(block, i, configs[i])
+        : block.cv_slider[i];
+    s->cv_slider = cvs * 16384.0f + 32768.0f;
     s->pot = block.pot[i] * 256.0f;
   }
 }
@@ -426,12 +431,13 @@ inline void ChainState::BindLocalParameters(
   const uint16_t *configs = settings.state().segment_configuration;
   for (size_t i = 0; i < num_internal_bindings_; ++i) {
     const ParameterBinding& m = binding_[i];
+    size_t s = m.source;
     segment_generator[m.generator].set_segment_parameters(
         m.destination,
-        cv_slider(block, m.source, configs[m.source]),
-        block.pot[m.source],
-        block.cv[m.source],
-        block.slider[m.source]);
+        process_cv_ >> s & 1 ? cv_slider(block, s, configs[s]) : block.cv_slider[s],
+        block.pot[s],
+        block.cv[s],
+        block.slider[s]);
   }
 }
 

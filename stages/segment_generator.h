@@ -204,6 +204,14 @@ class SegmentGenerator {
     return process_fn_ == &SegmentGenerator::ProcessAttOff || process_fn_ == &SegmentGenerator::ProcessAttSampleAndHold;
   }
 
+  inline bool needs_cv_preprocessing() const {
+    return !(
+      process_fn_ == &SegmentGenerator::ProcessFreeRunningLFO
+      || process_fn_ == &SegmentGenerator::ProcessTapLFO
+      || process_fn_ == &SegmentGenerator::ProcessTuring
+    );
+  }
+
  private:
   // Process function for the general case.
   DECLARE_PROCESS_FN(MultiSegment);
@@ -260,7 +268,6 @@ class SegmentGenerator {
   ProcessFn process_fn_;
 
   RampExtractor ramp_extractor_;
-  bool reset_ramp_extractor_;
 
   stmlib::HysteresisQuantizer function_quantizer_;
 
