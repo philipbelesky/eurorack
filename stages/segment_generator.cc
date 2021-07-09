@@ -199,8 +199,8 @@ void SegmentGenerator::ProcessMultiSegment(
       // between that and the end tracks what that segment would have done.
       ONE_POLE(
           start,
-          *segments_[previous_segment_].end,
-          PortamentoRateToLPCoefficient(*segments_[previous_segment_].portamento));
+          *previous.end,
+          PortamentoRateToLPCoefficient(*previous.portamento));
     }
 
     if (segment.time) {
@@ -231,14 +231,14 @@ void SegmentGenerator::ProcessMultiSegment(
     }
 
     if (go_to_segment != -1) {
-      if (segment.advance_tm) {
-        const float steps_param = parameters_[active_segment_].secondary;
-        const float prob_param = parameters_[active_segment_].primary;
+      if (previous.advance_tm) {
+        const float steps_param = parameters_[previous_segment_].secondary;
+        const float prob_param = parameters_[previous_segment_].primary;
         advance_tm(
             steps_param, prob_param,
-            (&segments_[active_segment_])->shift_register,
-            (&segments_[active_segment_])->register_value,
-            segment.bipolar);
+            (&segments_[previous_segment_])->shift_register,
+            (&segments_[previous_segment_])->register_value,
+            previous.bipolar);
       }
       phase = 0.0f;
       const Segment& destination = segments_[go_to_segment];
