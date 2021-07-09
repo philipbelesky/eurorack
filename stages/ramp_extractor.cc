@@ -80,33 +80,23 @@ void RampExtractor::Reset() {
   history_[current_pulse_].total_duration = 0;
 
   average_pulse_width_ = 0.0f;
+  apw_match_count_ = 0;
   fill(&prediction_error_[0], &prediction_error_[kMaxPatternPeriod + 1], 50.0f);
   fill(&predicted_period_[0], &predicted_period_[kMaxPatternPeriod + 1],
        sample_rate_ * 0.5f);
   prediction_error_[0] = 0.0f;
 }
 
-float RampExtractor::ComputeAveragePulseWidth(float tolerance) const {
-  float sum = 0.0f;
-  float fHistory = static_cast<float>(kHistorySize);
+void RampExtractor::UpdateAveragePulseWidth(float tolerance) {
   float cpw = history_[current_pulse_].pulse_width;
-  if (average_pulse_width_ >= 0.0f) {
-    if (IsWithinTolerance(average_pulse_width_, cpw, tolerance)) {
-      return (average_pulse_width_ * (fHistory - 1) + cpw) / fHistory;
-    }
-    return 0.0f;
+  if (IsWithinTolerance(average_pulse_width_, cpw, tolerance)) {
+    apw_match_count_ = min(kHistorySize, apw_match_count_ + 1);
+    float n = static_cast<float>(apw_match_count_);
+    average_pulse_width_ = ((n - 1.0f) * average_pulse_width_ + cpw) / n;
   } else {
-    for (size_t i = 0; i < kHistorySize; ++i) {
-      if (!IsWithinTolerance(history_[i].pulse_width,
-                            cpw,
-                            tolerance)) {
-        return 0.0f;
-      }
-      sum += history_[i].pulse_width;
-    }
-    return sum / fHistory;
+    apw_match_count_ = 1;
+    average_pulse_width_ = cpw;
   }
-
 }
 
 float RampExtractor::PredictNextPeriod() {
@@ -161,6 +151,7 @@ void RampExtractor::Process(
           audio_rate_period_hysteresis_ = audio_rate_period_ * 1.1f;
 
           average_pulse_width_ = 0.0f;
+          apw_match_count_ = 0;
 
           bool no_glide = f_ratio_ != ratio.ratio;
           f_ratio_ = ratio.ratio;
@@ -181,9 +172,10 @@ void RampExtractor::Process(
           // PW has been consistent over the past pulses.
           p.pulse_width = static_cast<float>(p.on_duration) / \
               static_cast<float>(p.total_duration);
-          average_pulse_width_ = ComputeAveragePulseWidth(kPulseWidthTolerance);
+          UpdateAveragePulseWidth(kPulseWidthTolerance);
           if (p.on_duration < 32) {
             average_pulse_width_ = 0.0f;
+            apw_match_count_ = 0;
           }
           frequency_ = target_frequency_ = 1.0f / PredictNextPeriod();
           // Reset the phase if necessary, according to the divider ratio.
@@ -236,7 +228,7 @@ void RampExtractor::Process(
         ++total_duration;
         if (flags & GATE_FLAG_FALLING) {
           p.on_duration = total_duration - 1;
-          if (average_pulse_width_ > 0.0f) {
+          if (apw_match_count_ >= kHistorySize) {
             float t_on = static_cast<float>(p.on_duration);
             float next = max_train_phase - static_cast<float>(reset_counter_) + 1.0f;
             float pw = average_pulse_width_;

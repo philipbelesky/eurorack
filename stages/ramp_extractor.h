@@ -74,7 +74,7 @@ class RampExtractor {
 
   static const size_t kHistorySize = 16;
 
-  float ComputeAveragePulseWidth(float tolerance) const;
+  void UpdateAveragePulseWidth(float tolerance);
 
   float PredictNextPeriod();
 
@@ -84,6 +84,7 @@ class RampExtractor {
   float prediction_error_[kMaxPatternPeriod + 1];
   float predicted_period_[kMaxPatternPeriod + 1];
   float average_pulse_width_;
+  size_t apw_match_count_;
 
   float train_phase_;
   float frequency_;
