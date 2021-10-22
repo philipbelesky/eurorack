@@ -104,7 +104,11 @@ class SegmentGenerator {
   struct Output {
     float value;
     float phase;
-    int32_t segment;
+    uint8_t segment;
+    // bit representation of which channels have changed discrete state,
+    // starting with the current channel (ie rightmost bit is current
+    // channel). Will only be something besides 1 or 0 for groups.
+    uint32_t discrete_state;
   };
 
   struct Segment {
@@ -127,6 +131,7 @@ class SegmentGenerator {
     bool advance_tm;
     uint16_t shift_register;
     float register_value;
+    size_t tm_steps;
   };
 
   void Init(Settings* settings);
@@ -270,6 +275,8 @@ class SegmentGenerator {
   RampExtractor ramp_extractor_;
 
   stmlib::HysteresisQuantizer function_quantizer_;
+  float last_slider_ratio;
+  stmlib::HysteresisQuantizer base_ratio_quantizer_;
 
   Segment segments_[kMaxNumSegments + 1];  // There's a sentinel!
   segment::Parameters parameters_[kMaxNumSegments];

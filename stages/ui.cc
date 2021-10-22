@@ -395,11 +395,24 @@ void Ui::UpdateLEDs() {
             // Not sure how to make it distinct.
           }
         }
+        uint32_t discrete_state_change_dur = system_clock.milliseconds() - discrete_change_time_[i];
+
         if (settings_->in_seg_gen_mode()
             && is_bipolar(configuration)
+            // the bipolar red blink makes it hard to see discrete state change indicator
+            && discrete_state_change_dur > kDiscreteStateBrightDur
             && ((system_clock.milliseconds() >> 8) % 4 == 0)) {
           color = LED_COLOR_RED;
           brightness = 0x1;
+        }
+
+        if (discrete_state_change_dur <= kDiscreteStateBrightDur) {
+          brightness = 0xf * (kDiscreteStateBrightDur - discrete_state_change_dur) / kDiscreteStateBrightDur
+            + brightness * discrete_state_change_dur / kDiscreteStateBrightDur;
+          if (discrete_state_change_dur <= kDiscreteStateBlinkDur + kDiscreteStatePreBlinkDur
+              && discrete_state_change_dur > kDiscreteStatePreBlinkDur) {
+            color = LED_COLOR_OFF;
+          }
         }
         leds_.set(
             LED_GROUP_UI + i,

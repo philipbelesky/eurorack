@@ -132,6 +132,11 @@ void Process(IOBuffer::Block* block, size_t size) {
 
     for (size_t i = 0; i < size; ++i) {
       block->output[channel][i] = settings.dac_code(channel, out[i].value);
+      if (out[i].discrete_state & 1) {
+        //ui.set_discrete_state(out[i].discrete_state);
+        ui.set_discrete_change(channel);
+      }
+      out[i].discrete_state >>= 1;
     }
   }
 }

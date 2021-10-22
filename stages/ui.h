@@ -40,6 +40,9 @@
 #include "stages/settings.h"
 
 const int32_t kLongPressDurationForMultiModeToggle = 5000;
+const int32_t kDiscreteStateBrightDur = 4000;
+const int32_t kDiscreteStateBlinkDur = 120;
+const uint32_t kDiscreteStatePreBlinkDur = 30;
 
 namespace stages {
 
@@ -67,6 +70,10 @@ class Ui {
     if (value) {
       slider_led_counter_[i] = duration;
     }
+  }
+
+  void set_discrete_change(int segment) {
+    discrete_change_time_[segment] = stmlib::system_clock.milliseconds();
   }
 
   inline void set_factory_test(bool factory_test) {
@@ -104,6 +111,8 @@ class Ui {
   int press_time_[kNumSwitches];
   int press_time_multimode_toggle_[kNumSwitches];
   uint8_t tracking_multimode_;
+
+  uint32_t discrete_change_time_[kNumChannels];
 
   Settings* settings_;
   ChainState* chain_state_;

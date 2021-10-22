@@ -153,16 +153,23 @@ inline float SegmentGenerator::PortamentoRateToLPCoefficient(float rate) const {
   return lut_portamento_coefficient[i];
 }
 
+static size_t tm_steps(const float param) {
+  size_t steps = static_cast<size_t>(16 * param + 1);
+  CONSTRAIN(steps, 1, 16);
+  return steps;
+}
+
+static float tm_prob(const float param) {
+  // Ensures registers lock at extremes
+  return 1.02 * param - 0.01;
+}
+
 static void advance_tm(
-    const float steps_param,
-    const float prob_param,
+    size_t steps,
+    float prob,
     uint16_t& shift_register,
     float& register_value,
     bool bipolar) {
-  size_t steps = static_cast<size_t>(16 * steps_param + 1);
-  CONSTRAIN(steps, 1, 16);
-  // Ensures regists lock at extremes
-  const float prob = 1.02 * prob_param - 0.01;
   uint16_t sr = shift_register;
   uint16_t copied_bit = (sr << (steps - 1)) & (1 << 15);
   uint16_t mutated = copied_bit ^ ((Random::GetFloat() < prob) << 15);
@@ -235,7 +242,7 @@ void SegmentGenerator::ProcessMultiSegment(
         const float steps_param = parameters_[previous_segment_].secondary;
         const float prob_param = parameters_[previous_segment_].primary;
         advance_tm(
-            steps_param, prob_param,
+            tm_steps(steps_param), tm_prob(prob_param),
             (&segments_[previous_segment_])->shift_register,
             (&segments_[previous_segment_])->register_value,
             previous.bipolar);
@@ -498,8 +505,20 @@ void SegmentGenerator::ProcessTapLFO(
   float ramp[12];
   uint8_t range = segments_[0].range;
   Ratio r = function_quantizer_.Lookup(
-    divider_ratios + divider_ratios_start[range], parameters_[0].primary * 1.03f, num_divider_ratios[range]
+    divider_ratios + divider_ratios_start[range],
+    parameters_[0].primary * 1.03f,
+    num_divider_ratios[range]
   );
+
+  Ratio slider_r = base_ratio_quantizer_.Lookup(
+    divider_ratios + divider_ratios_start[range],
+    local_parameters_[0].slider * 1.03f,
+    num_divider_ratios[range]
+  );
+  if (slider_r.ratio != last_slider_ratio) {
+    last_slider_ratio = slider_r.ratio;
+    out->discrete_state |= 1;
+  }
 
   ramp_extractor_.Process(r, gate_flags, ramp, size);
   for (size_t i = 0; i < size; ++i) {
@@ -807,7 +826,11 @@ void SegmentGenerator::ProcessDoubleScrollAttractor(
 
 void SegmentGenerator::ProcessTuring(
     const GateFlags* gate_flags, SegmentGenerator::Output* out, size_t size) {
-  float steps_param = parameters_[0].secondary;
+  size_t steps = tm_steps(parameters_[0].secondary);
+  if (segments_[0].tm_steps != steps) {
+    out->discrete_state |= 1;
+    segments_[0].tm_steps = steps;
+  }
   ParameterInterpolator primary(&primary_, parameters_[0].primary, size);
 
   Segment* seg = &segments_[0];
@@ -815,8 +838,8 @@ void SegmentGenerator::ProcessTuring(
     float prob_param = primary.Next();
     if (*gate_flags & GATE_FLAG_RISING) {
       advance_tm(
-          steps_param,
-          prob_param,
+          steps,
+          tm_prob(prob_param),
           seg->shift_register,
           seg->register_value,
           seg->bipolar);
