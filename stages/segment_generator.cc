@@ -636,8 +636,14 @@ void SegmentGenerator::ProcessPortamento(
 
 void SegmentGenerator::ProcessRandom(
     const GateFlags* gate_flags, SegmentGenerator::Output* out, size_t size) {
+    /*
   const float coefficient = PortamentoRateToLPCoefficient(
       parameters_[0].secondary);
+      */
+  float curve = parameters_[0].secondary * 0.6f - 0.1f;
+  if (curve < 0.0f) {
+      curve *= 100.0f;
+  }
   float f = 96.0f * (parameters_[0].primary - 0.5f);
   CONSTRAIN(f, -128.0f, 127.0f);
 
@@ -648,12 +654,21 @@ void SegmentGenerator::ProcessRandom(
     phase_ += frequency;
     if (phase_ >= 1.0f) {
       phase_ -= 1.0f;
+      start_ = value_;
       value_ = Random::GetFloat();
       if (segments_[0].bipolar) {
         value_ = 10.0f / 8.0f * (value_ - 0.5f);
       }
     }
-    ONE_POLE(lp_, value_, coefficient);
+    float mid = (value_ + start_) / 2.0f;
+    float p = phase_;
+    if (p >= 0.5f) {
+        p = WarpPhase((p - 0.5f) * 2.0f, 1.0f - curve);
+        lp_ = mid + (value_ - mid) * p;
+    } else {
+        p = WarpPhase(p * 2.0f, curve);
+        lp_ = start_ + (mid - start_) * p;
+    }
     active_segment_ = phase_ < 0.5 ? 0 : 1;
     out->value = lp_;
     out->phase = phase_;
