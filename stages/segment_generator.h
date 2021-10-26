@@ -254,6 +254,7 @@ class SegmentGenerator {
 
   float start_;
   float value_;
+  float next_; // used for spline interpolation in smooth random
   float lp_;
   float primary_;
 

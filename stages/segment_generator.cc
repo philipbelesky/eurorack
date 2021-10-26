@@ -74,6 +74,7 @@ void SegmentGenerator::Init(Settings* settings) {
 
   start_ = 0.0f;
   value_ = 0.0f;
+  next_ = Random::GetFloat();
   lp_ = 0.0f;
 
   monitored_segment_ = 0;
@@ -634,20 +635,74 @@ void SegmentGenerator::ProcessPortamento(
   }
 }
 
+// y1 - value at t = 0
+// k1 - slope at t = 0
+// y2 - value at t = 1
+// k2 - slope at t =
+float spline(float y1, float k1, float y2, float k2, float t) {
+  float r = 1.0f - t;
+  float d = y2 - y1;
+  return r * y1 + t * y2 + t * r * (r * (k1 - d) + t * (d - k2));
+}
+
+// Is it normal? Almost! This uses a ratio of uniforms approach to avoid pow,
+// exp, log, etc. We only use the simpler condition for rejection to avoid log,
+// but it gives quite convincing normal distribution regardless. I just needed
+// a distribution that concentrated around the mean, with simple, continuous
+// parameterization, but also with the possibility for extreme events.
+// Empirically, this algorithm terminates after one iteration 72% of the time
+// and at most 3 like 95% of the time, so hopefully okay performance wise.
+float almost_normal() {
+  float v;
+  float u;
+  float q;
+
+  do {
+    u = Random::GetFloat();
+    v = 1.7156f * (Random::GetFloat() - 0.5f);
+    float x = u - 0.449871f;
+    float y = fabsf(v) + 0.386595f;
+    q = x * x + y * (0.19600f * y - 0.25472f * x);
+  } while ( q > 0.27597f);
+  return v / u;
+}
+
+// Brownian modulo accuracy of almost_normal. Also constrained to [0, 1].
+// Constraint is imposed by "bouncing" off the edges.
+float almost_brownian(float last, float std_dev, float min, float max) {
+  float width = max - min;
+  last += width * std_dev * almost_normal();
+  if (last > max) {
+    last = 2 * max - last;
+  }
+  if (last < min) {
+    last = 2 * min - last;
+  }
+  CONSTRAIN(last, min, max);
+  return last;
+}
+
 void SegmentGenerator::ProcessRandom(
     const GateFlags* gate_flags, SegmentGenerator::Output* out, size_t size) {
-    /*
-  const float coefficient = PortamentoRateToLPCoefficient(
-      parameters_[0].secondary);
-      */
-  float curve = parameters_[0].secondary * 0.6f - 0.1f;
-  if (curve < 0.0f) {
-      curve *= 100.0f;
-  }
+  float smoothness = parameters_[0].secondary;
+
   float f = 96.0f * (parameters_[0].primary - 0.5f);
   CONSTRAIN(f, -128.0f, 127.0f);
 
   float frequency = SemitonesToRatio(f) * 2.0439497f / kSampleRate;
+
+  float k1 = value_ - start_;
+  float k2 = next_ - value_;
+
+  float k = (smoothness - 0.25f) / 0.25f;
+  CONSTRAIN(k, 0.0f, 1.0f);
+  float phase_mult = 1.0f;
+  if (smoothness < 0.25f) {
+    if (smoothness <= 0.001f) {
+      phase_mult = float(kSampleRate);
+    }
+    phase_mult = 0.25f / smoothness;
+  }
 
   active_segment_ = 0;
   while (size--) {
@@ -655,20 +710,32 @@ void SegmentGenerator::ProcessRandom(
     if (phase_ >= 1.0f) {
       phase_ -= 1.0f;
       start_ = value_;
-      value_ = Random::GetFloat();
-      if (segments_[0].bipolar) {
-        value_ = 10.0f / 8.0f * (value_ - 0.5f);
+      value_ = next_;
+      if (smoothness <= 0.5f) {
+        next_ = Random::GetFloat();
+        if (segments_[0].bipolar) {
+          next_ = 10.0f / 8.0f * (next_ - 0.5f);
+        }
+      } else {
+        float std_dev = 2.0f * (1.0 - smoothness);
+        std_dev = 0.5f * std_dev * std_dev + 0.01;
+        next_ = segments_[0].bipolar
+          ? almost_brownian(next_, std_dev, -5.0f / 8.0f, 5.0f / 8.0f)
+          : almost_brownian(next_, std_dev, 0.0f, 1.0f);
       }
+      if (segments_[0].bipolar) {
+
+      }
+      k1 = value_ - start_;
+      k2 = next_ - value_;
     }
-    float mid = (value_ + start_) / 2.0f;
-    float p = phase_;
-    if (p >= 0.5f) {
-        p = WarpPhase((p - 0.5f) * 2.0f, 1.0f - curve);
-        lp_ = mid + (value_ - mid) * p;
+    float p = phase_ * phase_mult;
+    if (p > 1.0f) {
+      lp_ = value_;
     } else {
-        p = WarpPhase(p * 2.0f, curve);
-        lp_ = start_ + (mid - start_) * p;
+      lp_ = spline(start_, k * k1, value_, k * k2, p);
     }
+
     active_segment_ = phase_ < 0.5 ? 0 : 1;
     out->value = lp_;
     out->phase = phase_;
