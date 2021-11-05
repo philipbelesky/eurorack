@@ -652,6 +652,7 @@ float spline(float y1, float k1, float y2, float k2, float t) {
 // parameterization, but also with the possibility for extreme events.
 // Empirically, this algorithm terminates after one iteration 72% of the time
 // and at most 3 like 95% of the time, so hopefully okay performance wise.
+// Code based on https://stackoverflow.com/questions/13001485/implementing-the-ratio-of-uniforms-for-normal-distribution-in-c
 float almost_normal() {
   float v;
   float u;
@@ -682,17 +683,75 @@ float almost_brownian(float last, float std_dev, float min, float max) {
   return last;
 }
 
-void SegmentGenerator::ProcessRandom(
+void SegmentGenerator::ProcessFreeRunningRandomLFO(
     const GateFlags* gate_flags, SegmentGenerator::Output* out, size_t size) {
-  float smoothness = parameters_[0].secondary;
-
   float f = 96.0f * (parameters_[0].primary - 0.5f);
   CONSTRAIN(f, -128.0f, 127.0f);
 
   float frequency = SemitonesToRatio(f) * 2.0439497f / kSampleRate;
 
-  float k1 = value_ - start_;
-  float k2 = next_ - value_;
+  active_segment_ = 0;
+  switch (segments_[active_segment_].range) {
+    case segment::RANGE_SLOW:
+      frequency /= 16.0f;
+      break;
+    case segment::RANGE_FAST:
+      frequency *= 64.0f;
+      break;
+    default:
+      // It's good where it is
+      break;
+  }
+
+  if (settings_->state().multimode == MULTI_MODE_STAGES_SLOW_LFO) {
+    frequency /= 8.0f;
+  }
+  CONSTRAIN(frequency, 0.0f, kMaxFrequency);
+
+  // phase_ gets updated in ProcessRandomFromPhase
+  float phase = phase_;
+  for (size_t i = 0; i < size; ++i) {
+      phase += frequency;
+      if (phase >= 1.0f) {
+          phase -= 1.0f;
+      }
+      out[i].phase = phase;
+  }
+  ProcessRandomFromPhase(parameters_[0].secondary, out, size);
+}
+
+void SegmentGenerator::ProcessTapRandomLFO(
+    const GateFlags* gate_flags, SegmentGenerator::Output* out, size_t size) {
+  float ramp[12];
+  uint8_t range = segments_[0].range;
+  Ratio r = function_quantizer_.Lookup(
+    divider_ratios + divider_ratios_start[range],
+    parameters_[0].primary * 1.03f,
+    num_divider_ratios[range]
+  );
+
+  Ratio slider_r = base_ratio_quantizer_.Lookup(
+    divider_ratios + divider_ratios_start[range],
+    local_parameters_[0].slider * 1.03f,
+    num_divider_ratios[range]
+  );
+  if (slider_r.ratio != last_slider_ratio) {
+    last_slider_ratio = slider_r.ratio;
+    out->discrete_state |= 1;
+  }
+
+  ramp_extractor_.Process(r, gate_flags, ramp, size);
+  for (size_t i = 0; i < size; ++i) {
+    out[i].phase = ramp[i];
+  }
+  ProcessRandomFromPhase(parameters_[0].secondary, out, size);
+}
+
+
+void SegmentGenerator::ProcessRandomFromPhase(
+    float smoothness,
+    SegmentGenerator::Output* in_out,
+    size_t size) {
 
   float k = (smoothness - 0.25f) / 0.25f;
   CONSTRAIN(k, 0.0f, 1.0f);
@@ -704,11 +763,9 @@ void SegmentGenerator::ProcessRandom(
     phase_mult = 0.25f / smoothness;
   }
 
-  active_segment_ = 0;
   while (size--) {
-    phase_ += frequency;
-    if (phase_ >= 1.0f) {
-      phase_ -= 1.0f;
+    float phase = in_out->phase;
+    if (phase < phase_) {
       start_ = value_;
       value_ = next_;
       if (smoothness <= 0.5f) {
@@ -723,26 +780,23 @@ void SegmentGenerator::ProcessRandom(
           ? almost_brownian(next_, std_dev, -5.0f / 8.0f, 5.0f / 8.0f)
           : almost_brownian(next_, std_dev, 0.0f, 1.0f);
       }
-      if (segments_[0].bipolar) {
-
-      }
-      k1 = value_ - start_;
-      k2 = next_ - value_;
     }
-    float p = phase_ * phase_mult;
+    float k1 = value_ - start_;
+    float k2 = next_ - value_;
+
+    float p = phase * phase_mult;
     if (p > 1.0f) {
       lp_ = value_;
     } else {
       lp_ = spline(start_, k * k1, value_, k * k2, p);
     }
-
-    active_segment_ = phase_ < 0.5 ? 0 : 1;
-    out->value = lp_;
-    out->phase = phase_;
-    out->segment = active_segment_;
-    ++out;
+    in_out->value = lp_;
+    phase_ = phase;
+    in_out->segment = active_segment_ = phase_ < 0.5 ? 0 : 1;;
+    ++in_out;
   }
 }
+
 
 inline float tcsa(float  v, const float w, const float b) {
   v *= 0.159155f; // Convert radians to phase.
@@ -1413,11 +1467,12 @@ SegmentGenerator::ProcessFn SegmentGenerator::advanced_process_fn_table_[16] = {
   &SegmentGenerator::ProcessProbabilisticGateGenerator,
 
   // TURING
-  &SegmentGenerator::ProcessRandom,
   &SegmentGenerator::ProcessDoubleScrollAttractor,
+  &SegmentGenerator::ProcessFreeRunningRandomLFO,
   //&SegmentGenerator::ProcessThomasSymmetricAttractor,
   &SegmentGenerator::ProcessTuring,
-  &SegmentGenerator::ProcessLogistic,
+  //&SegmentGenerator::ProcessLogistic,
+  &SegmentGenerator::ProcessTapRandomLFO,
 };
 
 

@@ -234,7 +234,8 @@ class SegmentGenerator {
   DECLARE_PROCESS_FN(AttOff);
   DECLARE_PROCESS_FN(AttSampleAndHold);
   DECLARE_PROCESS_FN(Portamento);
-  DECLARE_PROCESS_FN(Random);
+  DECLARE_PROCESS_FN(FreeRunningRandomLFO);
+  DECLARE_PROCESS_FN(TapRandomLFO);
   DECLARE_PROCESS_FN(ThomasSymmetricAttractor);
   DECLARE_PROCESS_FN(DoubleScrollAttractor);
   DECLARE_PROCESS_FN(Turing);
@@ -244,6 +245,7 @@ class SegmentGenerator {
   DECLARE_PROCESS_FN(Slave);
 
   void ShapeLFO(float shape, Output* in_out, size_t size, bool bipolar);
+  void ProcessRandomFromPhase(float smoothness, Output* in_out, size_t size);
   float WarpPhase(float t, float curve) const;
   float RateToFrequency(float rate) const;
   float PortamentoRateToLPCoefficient(float rate) const;
