@@ -1275,8 +1275,9 @@ void SegmentGenerator::Configure(
     return;
   }
 
-  bool sequencer_mode = segment_configuration[0].type != TYPE_STEP && \
-      !segment_configuration[0].loop && num_segments >= 3;
+  bool sequencer_mode = segment_configuration[0].type != TYPE_STEP &&
+                        segment_configuration[0].type != TYPE_TURING &&
+                        !segment_configuration[0].loop && num_segments >= 3;
   for (int i = 1; i < num_segments; ++i) {
     sequencer_mode = sequencer_mode && is_step(segment_configuration[i]);
   }
