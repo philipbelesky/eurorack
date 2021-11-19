@@ -645,32 +645,24 @@ float spline(float y1, float k1, float y2, float k2, float t) {
   return r * y1 + t * y2 + t * r * (r * (k1 - d) + t * (d - k2));
 }
 
-// Is it normal? Almost! This uses a ratio of uniforms approach to avoid pow,
-// exp, log, etc. We only use the simpler condition for rejection to avoid log,
-// but it gives quite convincing normal distribution regardless. I just needed
-// a distribution that concentrated around the mean, with simple, continuous
-// parameterization, but also with the possibility for extreme events.
-// Empirically, this algorithm terminates after one iteration 72% of the time
-// and at most 3 like 95% of the time, so hopefully okay performance wise.
-// Code based on https://stackoverflow.com/questions/13001485/implementing-the-ratio-of-uniforms-for-normal-distribution-in-c
+// Is it normal? Almost! This gives a shockingly good approximation of a normal
+// distribution, doesn't use any exps, logs, cos, etc., and doesn't
+// occasionally take a bunch of iterations. Output is 16bit.
 float almost_normal() {
-  float v;
-  float u;
-  float q;
-
-  do {
-    u = Random::GetFloat();
-    v = 1.7156f * (Random::GetFloat() - 0.5f);
-    float x = u - 0.449871f;
-    float y = fabsf(v) + 0.386595f;
-    q = x * x + y * (0.19600f * y - 0.25472f * x);
-  } while ( q > 0.27597f);
-  return v / u;
+  // 37837.21 and 3.4641032 are 65536 and 2 divided by 0.57735 respectively
+  // 0.57735 is the std of the sum of the four uniform distributions, giving us
+  // a std of 1. This isn't really necessary, but is kinda convenient for
+  // thinking about range.
+  uint32_t a = Random::GetWord();
+  uint32_t b = Random::GetWord();
+  return static_cast<float>(
+    (a >> 16) + (a & 0xffff) + (b >> 16) + (b & 0xffff)
+    ) / 37837.21f - 3.4641032f;
 }
 
 // Brownian modulo accuracy of almost_normal. Also constrained to [0, 1].
 // Constraint is imposed by "bouncing" off the edges.
-float almost_brownian(float last, float std_dev, float min, float max) {
+inline float almost_brownian(float last, float std_dev, float min, float max) {
   float width = max - min;
   last += width * std_dev * almost_normal();
   if (last > max) {
@@ -696,7 +688,8 @@ void SegmentGenerator::ProcessFreeRunningRandomLFO(
       frequency /= 16.0f;
       break;
     case segment::RANGE_FAST:
-      frequency *= 64.0f;
+      // From ~32hz to ~8khz, which is high enough to to go full noise
+      frequency *= 64.0f * 4.0f;
       break;
     default:
       // It's good where it is
@@ -706,18 +699,40 @@ void SegmentGenerator::ProcessFreeRunningRandomLFO(
   if (settings_->state().multimode == MULTI_MODE_STAGES_SLOW_LFO) {
     frequency /= 8.0f;
   }
-  CONSTRAIN(frequency, 0.0f, kMaxFrequency);
 
-  // phase_ gets updated in ProcessRandomFromPhase
-  float phase = phase_;
-  for (size_t i = 0; i < size; ++i) {
+  if (frequency > 0.25f) {
+    phase_ = 0.0f;
+    float std_dev = 2.0f * (1.0 - parameters_[0].secondary);
+    std_dev = 0.5f * std_dev * std_dev + 0.01;
+    float min = segments_[0].bipolar ? -5.0f / 8.0f : 0.0f;
+    float max = segments_[0].bipolar ? 5.0f / 8.0f : 1.0f;
+    if (parameters_[0].secondary < 0.5) {
+      while (size--) {
+        out->value = value_ = next_;
+        out->segment = 0;
+        next_ = Random::GetFloat() * (max - min) + min;
+        ++out;
+      }
+    } else {
+      while (size--) {
+        out->value = value_ = next_;
+        out->segment = 0;
+        next_ = almost_brownian(next_, std_dev, min, max);
+        ++out;
+      }
+    }
+  } else {
+    // phase_ gets updated in ProcessRandomFromPhase
+    float phase = phase_;
+    for (size_t i = 0; i < size; ++i) {
       phase += frequency;
       if (phase >= 1.0f) {
-          phase -= 1.0f;
+        phase -= 1.0f;
       }
       out[i].phase = phase;
+    }
+    ProcessRandomFromPhase(parameters_[0].secondary, out, size);
   }
-  ProcessRandomFromPhase(parameters_[0].secondary, out, size);
 }
 
 void SegmentGenerator::ProcessTapRandomLFO(
@@ -781,13 +796,13 @@ void SegmentGenerator::ProcessRandomFromPhase(
           : almost_brownian(next_, std_dev, 0.0f, 1.0f);
       }
     }
-    float k1 = value_ - start_;
-    float k2 = next_ - value_;
 
     float p = phase * phase_mult;
-    if (p > 1.0f) {
+    if (p >= 1.0f) {
       lp_ = value_;
     } else {
+      float k1 = value_ - start_;
+      float k2 = next_ - value_;
       lp_ = spline(start_, k * k1, value_, k * k2, p);
     }
     in_out->value = lp_;
