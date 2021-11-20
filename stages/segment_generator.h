@@ -36,7 +36,7 @@
 #include "stages/delay_line_16_bits.h"
 
 #include "stages/ramp_extractor.h"
-#include "stages/settings.h"
+#include "stages/modes.h"
 #include "stmlib/utils/random.h"
 
 namespace stages {
@@ -134,7 +134,7 @@ class SegmentGenerator {
     size_t tm_steps;
   };
 
-  void Init(Settings* settings);
+  void Init(MultiMode multimode);
 
   typedef void (SegmentGenerator::*ProcessFn)(
       const stmlib::GateFlags* gate_flags, Output* out, size_t size);
@@ -143,6 +143,10 @@ class SegmentGenerator {
       const stmlib::GateFlags* gate_flags, Output* out, size_t size) {
     (this->*process_fn_)(gate_flags, out, size);
     return active_segment_ == 0;
+  }
+
+  void SetMode(MultiMode multimode) {
+    multimode_ = multimode;
   }
 
   void Configure(
@@ -163,7 +167,7 @@ class SegmentGenerator {
     int type = int(segment_configuration.type);
     i += type * 4;
     ProcessFn new_process_fn =
-        (settings_->state().multimode == MULTI_MODE_STAGES_ADVANCED
+        (multimode_ == MULTI_MODE_STAGES_ADVANCED
         ? advanced_process_fn_table_ : process_fn_table_)[i];
     if (new_process_fn != process_fn_
         || segments_[0].range != segment_configuration.range) {
@@ -271,7 +275,7 @@ class SegmentGenerator {
 
   int num_segments_;
 
-  Settings* settings_;
+  MultiMode multimode_;
 
   ProcessFn process_fn_;
 
