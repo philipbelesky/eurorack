@@ -109,32 +109,7 @@ float RampExtractor::PredictNextPeriod() {
   for (int i = 0; i <= kMaxPatternPeriod; ++i) {
     float error = predicted_period_[i] - last_period;
     float error_sq = error * error;
-    //float pred_err_err =  prediction_error_[i] - error_sq;
-    //float pred_err_err =  error_sq - prediction_error_[i];
-    /*
-    if (pred_err_err > 0) {
-      prediction_error_[i] -= 0.5f * pred_err_err;
-    } else {
-      prediction_error_[i] -= 0.5f * pred_err_err;
-    }
-    */
-   /*
-    const float w = error_sq > prediction_error_[i] ? 0.7f : 0.5f;
-    prediction_error_[i] += (w / (1 - w)) * error_sq;
-    prediction_error_[i] *= (1 - w);
-    */
-   //prediction_error_[i] += error_sq;
-   //prediction_error_[i] *= 0.5f;
     SLOPE(prediction_error_[i], error_sq, 0.7f, 0.2f);
-    /*
-#define SLOPE(out, in, positive, negative) { \
-  float error = (in) - out; \
-  out += (error > 0 ? positive : negative) * error; \
-}
-*/
-
-    //prediction_error_[i] += 0.5f * error_sq;
-
     if (i == 0) {
       ONE_POLE(predicted_period_[0], last_period, 0.5f);
     } else {
@@ -205,8 +180,7 @@ void RampExtractor::Process(
             // Compute the pulse width of the previous pulse, and check if the
             // PW has been consistent over the past pulses.
             min_period_hysteresis_ = min_period_;
-            p.pulse_width = static_cast<float>(p.on_duration) / \
-                static_cast<float>(p.total_duration);
+            p.pulse_width = static_cast<float>(p.on_duration) / period;
             UpdateAveragePulseWidth(kPulseWidthTolerance);
             if (p.on_duration < 32) {
               average_pulse_width_ = 0.0f;
