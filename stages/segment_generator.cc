@@ -311,7 +311,7 @@ void SegmentGenerator::ProcessRiseAndFall(
     }
     out->value = lp_;
     out->phase = phase_;
-    out->segment = active_segment_ = fabsf(lp_) > 0.1 ? 0 : 1;
+    out->segment = active_segment_ = fabsf(lp_) > 0.1f ? 0 : 1;
     out++;
   }
 }
@@ -365,7 +365,7 @@ void SegmentGenerator::ProcessGateGenerator(
 void SegmentGenerator::ProcessProbabilisticGateGenerator(
     const GateFlags* gate_flags, SegmentGenerator::Output* out, size_t size) {
   ParameterInterpolator primary(&primary_, parameters_[0].primary, size);
-  const float prob = 1.02 * parameters_[0].secondary - 0.01;
+  const float prob = 1.02f * parameters_[0].secondary - 0.01f;
   while (size--) {
     if (*gate_flags & GATE_FLAG_RISING) {
       active_segment_ = Random::GetFloat() < prob ? 0 : 1;
@@ -704,11 +704,11 @@ void SegmentGenerator::ProcessFreeRunningRandomLFO(
 
   if (frequency > 0.25f) {
     phase_ = 0.0f;
-    float std_dev = 2.0f * (1.0 - parameters_[0].secondary);
-    std_dev = 0.5f * std_dev * std_dev + 0.01;
+    float std_dev = 2.0f * (1.0f - parameters_[0].secondary);
+    std_dev = 0.5f * std_dev * std_dev + 0.01f;
     float min = segments_[0].bipolar ? -5.0f / 8.0f : 0.0f;
     float max = segments_[0].bipolar ? 5.0f / 8.0f : 1.0f;
-    if (parameters_[0].secondary < 0.5) {
+    if (parameters_[0].secondary < 0.5f) {
       while (size--) {
         out->value = value_ = next_;
         out->segment = 0;
@@ -782,8 +782,8 @@ void SegmentGenerator::ProcessRandomFromPhase(
           next_ = 10.0f / 8.0f * (next_ - 0.5f);
         }
       } else {
-        float std_dev = 2.0f * (1.0 - smoothness);
-        std_dev = 0.5f * std_dev * std_dev + 0.01;
+        float std_dev = 2.0f * (1.0f - smoothness);
+        std_dev = 0.5f * std_dev * std_dev + 0.01f;
         next_ = segments_[0].bipolar
           ? almost_brownian(next_, std_dev, -5.0f / 8.0f, 5.0f / 8.0f)
           : almost_brownian(next_, std_dev, 0.0f, 1.0f);
@@ -800,7 +800,7 @@ void SegmentGenerator::ProcessRandomFromPhase(
     }
     in_out->value = lp_;
     phase_ = phase;
-    in_out->segment = active_segment_ = phase_ < 0.5 ? 0 : 1;;
+    in_out->segment = active_segment_ = phase_ < 0.5f ? 0 : 1;;
     ++in_out;
   }
 }
@@ -925,12 +925,12 @@ void SegmentGenerator::ProcessDoubleScrollAttractor(
       // ~32hz to ~8s.
       break;
     default:
-      // ~2s to ~120s.
+      // ~2hz to ~120s.
       frequency /= 16.0f;
       break;
   }
   // Could increase to 0.075 if we used runge-kutta
-  CONSTRAIN(frequency, 0.0f, 0.01);
+  CONSTRAIN(frequency, 0.0f, 0.01f);
 
 
   const float a = 42.0f;
@@ -1014,7 +1014,7 @@ void SegmentGenerator::ProcessLogistic(
     active_segment_ = *gate_flags & GATE_FLAG_HIGH ? 0 : 1;
 
     ONE_POLE(lp_, value_, coefficient);
-    out->value = segments_[0].bipolar ? 10.0f / 8.0f * (lp_ - 0.5) : lp_;
+    out->value = segments_[0].bipolar ? 10.0f / 8.0f * (lp_ - 0.5f) : lp_;
     out->phase = 0.5f;
     out->segment = active_segment_;
     ++out;

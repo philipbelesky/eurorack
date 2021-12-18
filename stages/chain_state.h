@@ -220,8 +220,9 @@ class ChainState {
           const float pot = block.pot[i];
           const float raw_cv = block.cv_slider_alt(
               i,
-              (bipolar ? -1.0f : 0.0f) * (quantize ? 0.25 : 1.0f),
-              (bipolar ? 2.0f : 1.0f) * (quantize ? 0.25f : 1.0f), 0.0f,
+              (bipolar ? -1.0f : 0.0f) * (quantize ? 0.25f : 1.0f),
+              (bipolar ?  2.0f : 1.0f) * (quantize ? 0.25f : 1.0f),
+              0.0f,
               att ? (bipolar ? 2.0f * pot - 1.0f : pot) : 1.0f);
           if (quantize) {
             return quantizers_[i].Process(raw_cv);

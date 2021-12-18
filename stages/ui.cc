@@ -131,9 +131,9 @@ void Ui::Poll() {
             switch (seg_config[i] & 0x3) {
               case 0: // ramp
                 seg_config[i] &= ~0x0300; // reset range bits
-                if (slider < 0.25) {
+                if (slider < 0.25f) {
                   seg_config[i] |= 0x0100;
-                } else if (slider > 0.75) {
+                } else if (slider > 0.75f) {
                   seg_config[i] |= 0x0200;
                 }
                 // default middle range is 0, so no else
@@ -141,9 +141,9 @@ void Ui::Poll() {
               case 3: // random
                 if (chain_state_->loop_status(i) == ChainState::LOOP_STATUS_SELF) {
                   seg_config[i] &= ~0x0300; // reset range bits
-                  if (slider < 0.25) {
+                  if (slider < 0.25f) {
                     seg_config[i] |= 0x0100;
-                  } else if (slider > 0.75) {
+                  } else if (slider > 0.75f) {
                     seg_config[i] |= 0x0200;
                   }
                   // default middle range is 0, so no else
@@ -158,9 +158,9 @@ void Ui::Poll() {
             }
           } else if (settings_->in_ouroboros_mode()) {
             seg_config[i] &= ~0x0c00; // reset range bits
-            if (slider < 0.25) {
+            if (slider < 0.25f) {
               seg_config[i] |= 0x0800;
-            } else if ((i == 0 && slider < 0.75) || (i > 0 && slider > 0.75)) {
+            } else if ((i == 0 && slider < 0.75f) || (i > 0 && slider > 0.75f)) {
               // high is default (0) in ouroboros root; otherwise middle is default
               seg_config[i] |= 0x0400;
             }
