@@ -38,6 +38,7 @@
 #include "stages/ramp_extractor.h"
 #include "stages/modes.h"
 #include "stmlib/utils/random.h"
+#include "stages/quantizer.h"
 
 namespace stages {
 
@@ -76,6 +77,7 @@ struct Configuration {
   bool loop;
   bool bipolar;
   FreqRange range; // For LFOs
+  int quant_scale; // For TMs
 };
 
 struct Parameters {
@@ -127,6 +129,7 @@ class SegmentGenerator {
     bool bipolar;
     bool retrig;
     segment::FreqRange range;
+    uint8_t quant_scale;
 
     bool advance_tm;
     uint16_t shift_register;
@@ -160,7 +163,7 @@ class SegmentGenerator {
 
   inline void ConfigureSingleSegment(
       bool has_trigger,
-      segment::Configuration segment_configuration) {
+      const segment::Configuration segment_configuration) {
 
     int i = has_trigger ? 2 : 0;
     i += segment_configuration.loop ? 1 : 0;
@@ -178,6 +181,7 @@ class SegmentGenerator {
     segments_[0].bipolar = segment_configuration.bipolar;
     segments_[0].retrig = (segment_configuration.type != segment::TYPE_RAMP)
         || !segment_configuration.bipolar;
+    segments_[0].quant_scale = segment_configuration.quant_scale;
     num_segments_ = 1;
   }
 
@@ -185,6 +189,14 @@ class SegmentGenerator {
     monitored_segment_ = i;
     process_fn_ = &SegmentGenerator::ProcessSlave;
     num_segments_ = 0;
+  }
+
+  // -1.0f -> -octaves (in pitch) and 1.0f -> octaves (in pitch)
+  float QuantizeLinear(int seg, const Scale& scale, float value, int octaves) {
+    int ix = step_quantizer_[seg].Process((value + 1.0f) / 2.0f, 2 * octaves * scale.num_notes + 1);
+    int16_t pitch = scale.notes[ix % scale.num_notes] + (ix / scale.num_notes) * scale.span;
+    pitch -= octaves * scale.span;
+    return static_cast<float>(pitch) / eight_octaves;
   }
 
   void set_segment_parameters(int index, float primary, float secondary) {
@@ -282,7 +294,6 @@ class SegmentGenerator {
   RampExtractor ramp_extractor_;
 
   stmlib::HysteresisQuantizer function_quantizer_;
-  float last_slider_ratio;
 
   Segment segments_[kMaxNumSegments + 1];  // There's a sentinel!
   segment::Parameters parameters_[kMaxNumSegments];

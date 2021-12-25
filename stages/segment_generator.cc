@@ -29,6 +29,7 @@
 #include "stages/segment_generator.h"
 
 #include "stages/oscillator.h"
+#include "stages/quantizer_scales.h"
 #include "stmlib/dsp/dsp.h"
 #include "stmlib/dsp/parameter_interpolator.h"
 #include "stmlib/dsp/units.h"
@@ -94,6 +95,8 @@ void SegmentGenerator::Init(MultiMode multimode) {
   s.if_complete = 0;
   s.bipolar = false;
   s.retrig = true;
+  s.range = RANGE_DEFAULT;
+  s.quant_scale = 0;
   s.shift_register = Random::GetSample();
   s.register_value = Random::GetFloat();
   fill(&segments_[0], &segments_[kMaxNumSegments + 1], s);
@@ -162,7 +165,7 @@ static size_t tm_steps(const float param) {
 
 static float tm_prob(const float param) {
   // Ensures registers lock at extremes
-  return 1.02 * param - 0.01;
+  return 1.02f * param - 0.01f;
 }
 
 static void advance_tm(
@@ -990,7 +993,9 @@ void SegmentGenerator::ProcessTuring(
       value_ = seg->register_value;
     }
     active_segment_ = *gate_flags & GATE_FLAG_HIGH ? 0 : 1;
-    out->value = segments_[0].register_value;
+    out->value = segments_[0].quant_scale > 0
+      ? QuantizeLinear(0, scales[segments_[0].quant_scale], value_, 2)
+      : value_;
     out->phase = 0.5f;
     out->segment = active_segment_;
     ++out;

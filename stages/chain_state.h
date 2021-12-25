@@ -158,6 +158,13 @@ class ChainState {
       return c;
     }
 
+    inline segment::Configuration configuration(uint16_t local_config) {
+      segment::Configuration c = configuration();
+      c.range = segment::FreqRange(local_config >> 8 & 0x03);
+      c.quant_scale = local_config >> 12 & 0x03;
+      return c;
+    }
+
     inline size_t index() const {
       return (size_t(flags) >> 5) & 0b111;
     }

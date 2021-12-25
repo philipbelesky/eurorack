@@ -128,35 +128,41 @@ void Ui::Poll() {
           changing_slider_prop_ |= 1 << i;
 
           if (settings_->in_seg_gen_mode()) {
-            switch (seg_config[i] & 0x3) {
+            bool change_range = false;
+            bool change_scale = false;
+            switch (old_flags & 0x3) {
               case 0: // ramp
-                seg_config[i] &= ~0x0300; // reset range bits
-                if (slider < 0.25f) {
-                  seg_config[i] |= 0x0100;
-                } else if (slider > 0.75f) {
-                  seg_config[i] |= 0x0200;
-                }
-                // default middle range is 0, so no else
+                change_range = true;
                 break;
               case 3: // random
                 if (chain_state_->loop_status(i) == ChainState::LOOP_STATUS_SELF) {
-                  seg_config[i] &= ~0x0300; // reset range bits
-                  if (slider < 0.25f) {
-                    seg_config[i] |= 0x0100;
-                  } else if (slider > 0.75f) {
-                    seg_config[i] |= 0x0200;
-                  }
-                  // default middle range is 0, so no else
+                  change_range = true;
+                } else {
+                  change_scale = true;
                 }
                 break;
               case 1: // step
               case 2: // hold
-                seg_config[i] &= ~0x3000; // reset quant scale bits
-                seg_config[i] |= static_cast<uint8_t>(4 *  slider) << 12;
+                change_scale = true;
                 break;
               default: break;
             }
+
+            if (change_range) {
+              seg_config[i] &= ~0x0300; // reset range bits
+              if (slider < 0.25f) {
+                seg_config[i] |= 0x0100;
+              } else if (slider > 0.75f) {
+                seg_config[i] |= 0x0200;
+              }
+              // default middle range is 0, so no else
+            } else if (change_scale) {
+              seg_config[i] &= ~0x3000; // reset quant scale bits
+              seg_config[i] |= static_cast<uint8_t>(4 *  slider) << 12;
+            }
+
           } else if (settings_->in_ouroboros_mode()) {
+
             seg_config[i] &= ~0x0c00; // reset range bits
             if (slider < 0.25f) {
               seg_config[i] |= 0x0800;
@@ -370,10 +376,11 @@ void Ui::UpdateLEDs() {
           brightness = fade_patterns[configuration & 0x4 ? 3 : 0];
         }
         uint8_t type = configuration & 0x3;
+        bool self_loop = chain_state_->loop_status(i) == ChainState::LOOP_STATUS_SELF;
         LedColor color = palette_[type];
         if (settings_->in_seg_gen_mode()) {
           uint8_t speed = configuration >> 8 & 0x3;
-          if (chain_state_->loop_status(i) == ChainState::LOOP_STATUS_SELF) {
+          if (self_loop) {
             brightness = lfo_patterns[speed];
           } else {
             brightness = fade_patterns[chain_state_->loop_status(i)];
@@ -385,10 +392,14 @@ void Ui::UpdateLEDs() {
               }
             }
           }
-          if ((changing_slider_prop_ & (1 << i)) && (type == 1 || type == 2)) {
+
+          if ((changing_slider_prop_ & (1 << i)) && (
+              type == 1
+              || type == 2
+              || (type == 3 && !self_loop))) {
             uint8_t scale = 3 - ((configuration >> 12) & 0x3);
-            color = (system_clock.milliseconds() >> 6) % 2 == 0 ?
-              palette_[scale] : LED_COLOR_OFF;
+            color = (system_clock.milliseconds() >> 6) % 2 == 0
+              ? palette_[scale] : LED_COLOR_OFF;
           } else if (type == 3) {
             uint8_t proportion = (system_clock.milliseconds() >> 7) & 15;
             proportion = proportion > 7 ? 15 - proportion : proportion;

@@ -304,8 +304,7 @@ void ChainState::Configure(
         set_loop_status(i, segment, last_loop);
       } else {
         // Create a free-running channel.
-        segment::Configuration c = local_channel(i)->configuration();
-        c.range = segment::FreqRange(local_configs[i] >> 8 & 0x03);
+        segment::Configuration c = local_channel(i)->configuration(local_configs[i]);
         segment_generator[i].ConfigureSingleSegment(false, c);
         binding_[num_bindings_].generator = i;
         binding_[num_bindings_].source = i;
@@ -326,7 +325,9 @@ void ChainState::Configure(
       last_loop.end = -1;
       while (add_more_segments) {
         // Add an entry in the configuration array.
-        segment::Configuration c = channel_state_[channel].configuration();
+        segment::Configuration c = channel < last_local_channel
+          ? channel_state_[channel].configuration(local_configs[i + num_segments])
+          : channel_state_[channel].configuration();
         configuration[num_segments] = c;
         dirty |= dirty_[channel];
 
@@ -342,9 +343,6 @@ void ChainState::Configure(
           // Bind local CV/pot to this segment's parameters.
           binding_[num_bindings_].source = i + num_segments;
           ++num_internal_bindings_;
-          // Note: this will only have an effect on LFOs
-          configuration[num_segments].range =
-            segment::FreqRange((local_configs[i + num_segments] >> 8) & 0x03);
         } else {
           // Bind remote CV/pot to this segment's parameters.
           binding_[num_bindings_].source = channel;
