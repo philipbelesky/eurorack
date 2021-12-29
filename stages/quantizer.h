@@ -1,6 +1,7 @@
 // Copyright 2015 Emilie Gillet.
 //
 // Author: Emilie Gillet (emilie.o.gillet@gmail.com)
+// Re-implemented by Bryan Head to eliminate codebook
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -25,7 +26,6 @@
 // -----------------------------------------------------------------------------
 //
 // Note quantizer
-
 #ifndef STAGES_QUANTIZER_H_
 #define STAGES_QUANTIZER_H_
 
@@ -35,6 +35,7 @@ namespace stages {
 
 struct Scale {
   int16_t span;
+  //uint8_t num_notes;
   size_t num_notes;
   int16_t notes[16];
 };
@@ -43,36 +44,39 @@ const float eight_octaves = static_cast<float>((12 << 7) * 8);
 
 class Quantizer {
  public:
-  Quantizer() { }
-  ~Quantizer() { }
+  Quantizer() {}
+  ~Quantizer() {}
 
   void Init();
 
   // Assumes 0.0 = 0v and 1.0f = 8v
   float Process(float pitch) {
-    return Process(static_cast<int32_t>(pitch * eight_octaves)) / eight_octaves;
+    return Process(static_cast<int16_t>(pitch * eight_octaves)) / eight_octaves;
   }
 
-  int32_t Process(int32_t pitch) {
-    return Process(pitch, 0);
-  }
+  int16_t Process(int16_t pitch) { return Process(pitch, 0); }
 
-  int32_t Process(int32_t pitch, int32_t root);
+  int16_t Process(int16_t pitch, int16_t root);
 
   void Configure(const Scale& scale) {
-    Configure(scale.notes, scale.span, scale.num_notes);
+    notes_ = scale.notes;
+    span_ = scale.span;
+    num_notes_ = scale.num_notes;
+    enabled_ = notes_ != NULL && num_notes_ != 0 && span_ != 0;
   }
+
  private:
-  void Configure(const int16_t* notes, int16_t span, size_t num_notes);
   bool enabled_;
-  int16_t codebook_[128];
-  int32_t codeword_;
-  int32_t previous_boundary_;
-  int32_t next_boundary_;
+  int16_t codeword_;
+  int16_t previous_boundary_;
+  int16_t next_boundary_;
+  const int16_t* notes_;
+  int16_t span_;
+  uint8_t num_notes_;
 
   DISALLOW_COPY_AND_ASSIGN(Quantizer);
 };
 
-}  // namespace braids
+}  // namespace stages
 
-#endif // STAGES_QUANTIZER_H_
+#endif

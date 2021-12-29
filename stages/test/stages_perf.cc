@@ -6,6 +6,9 @@
 #include <random>
 
 #include "stages/test/fixtures.h"
+#include "stages/quantizer.h"
+#include "stages/braids_quantizer.h"
+#include "stages/quantizer_scales.h"
 
 using namespace std;
 using namespace chrono;
@@ -173,6 +176,33 @@ void TimeRandomSineTapLFO() {
         return 0;
       },
       7);
+}
+
+void TimeSmallQuantizer() {
+  cout << "Small Quantizer" << endl;
+  Quantizer quant;
+  quant.Init();
+  quant.Configure(scales[1]);
+  timeit(
+    [&quant] {
+      return quant.Process(2.0f * static_cast<float>(rand()) / RAND_MAX - 1.0f);
+    },
+    7
+  );
+}
+
+
+void TimeQuantizer() {
+  cout << "Quantizer" << endl;
+  BraidsQuantizer quant;
+  quant.Init();
+  quant.Configure(scales[1]);
+  timeit(
+    [&quant] {
+      return quant.Process(2.0f * static_cast<float>(rand()) / RAND_MAX - 1.0f);
+    },
+    7
+  );
 }
 
 int main() {

@@ -1,6 +1,7 @@
 // Copyright 2015 Emilie Gillet.
 //
 // Author: Emilie Gillet (emilie.o.gillet@gmail.com)
+// Re-implemented by Bryan Head to eliminate codebook
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -28,7 +29,6 @@
 
 #include "stages/quantizer.h"
 
-#include <algorithm>
 #include <cstdlib>
 
 namespace stages {
@@ -38,70 +38,48 @@ void Quantizer::Init() {
   codeword_ = 0;
   previous_boundary_ = 0;
   next_boundary_ = 0;
-  for (int16_t i = 0; i < 128; ++i) {
-    codebook_[i] = (i - 64) << 7;
-  }
 }
 
-void Quantizer::Configure(
-    const int16_t* notes,
-    int16_t span,
-    size_t num_notes) {
-  enabled_ = notes != NULL && num_notes != 0 && span != 0;
-  if (enabled_) {
-    int32_t octave = 0;
-    size_t note = 0;
-    int16_t root = 0;
-    for (int32_t i = 0; i < 64; ++i) {
-      int32_t up = root + notes[note] + span * octave;
-      int32_t down = root + notes[num_notes - 1 - note] + (-octave - 1) * span;
-      CLIP(up)
-      CLIP(down)
-      codebook_[64 + i] = up;
-      codebook_[64 - i - 1] = down;
-      ++note;
-      if (note >= num_notes) {
-        note = 0;
-        ++octave;
-      }
-    }
-  }
-}
-
-int32_t Quantizer::Process(int32_t pitch, int32_t root) {
+int16_t Quantizer::Process(int16_t pitch, int16_t root) {
   if (!enabled_) {
     return pitch;
   }
-
   pitch -= root;
+
   if (pitch >= previous_boundary_ && pitch <= next_boundary_) {
-    // We're still in the voronoi cell for the active codeword.
     pitch = codeword_;
   } else {
-    // Search for the nearest neighbour in the codebook.
-    int16_t upper_bound_index = std::upper_bound(
-        &codebook_[3],
-        &codebook_[126],
-        static_cast<int16_t>(pitch)) - &codebook_[0];
-    int16_t lower_bound_index = upper_bound_index - 2;
+    int16_t octave = pitch / span_ - (pitch < 0 ? 1 : 0);
+    int16_t rel_pitch = pitch - span_ * octave;
 
     int16_t best_distance = 16384;
     int16_t q = -1;
-    for (int16_t i = lower_bound_index; i <= upper_bound_index; ++i) {
-      int16_t distance = abs(pitch - codebook_[i]);
+    for (size_t i = 0; i < num_notes_; i++) {
+      int16_t distance = abs(rel_pitch - notes_[i]);
       if (distance < best_distance) {
         best_distance = distance;
         q = i;
       }
     }
-    codeword_ = codebook_[q];
-    // Enlarge the current voronoi cell a bit for hysteresis.
-    previous_boundary_ = (9 * codebook_[q - 1] + 7 * codeword_) >> 4;
-    next_boundary_ = (9 * codebook_[q + 1] + 7 * codeword_) >> 4;
+    if (abs(pitch - (octave + 1) * span_ + notes_[0]) < best_distance) {
+      octave++;
+      q = 0;
+    } else if (abs(pitch - (octave - 1) * span_ + notes_[num_notes_ - 1]) < best_distance) {
+      octave--;
+      q = num_notes_ - 1;
+    }
+    codeword_ = notes_[q] + octave * span_;
+    previous_boundary_ = q == 0
+      ? notes_[num_notes_ - 1] + (octave - 1) * span_
+      : notes_[q - 1] + octave * span_;
+    previous_boundary_ = (9 * previous_boundary_ + 7 * codeword_) >> 4;
+    next_boundary_ = q == num_notes_ - 1
+      ? notes_[0] + (octave + 1) * span_
+      : notes_[q + 1] + octave * span_;
+    next_boundary_ = (9 * next_boundary_ + 7 * codeword_) >> 4;
     pitch = codeword_;
   }
   pitch += root;
   return pitch;
 }
-
 }  // namespace stages

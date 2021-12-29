@@ -20,6 +20,10 @@
 
 #include "stages/test/fixtures.h"
 
+#include "stages/braids_quantizer.h"
+#include "stages/quantizer.h"
+#include "stages/quantizer_scales.h"
+
 using namespace stages;
 using namespace stmlib;
 
@@ -297,6 +301,78 @@ void TestDelayLine() {
   }
 }
 
+float rand_float() {
+  return static_cast<float>(rand()) / RAND_MAX;
+}
+
+void TestSmallQuantizer() {
+  printf("Testing quantizer\n");
+  BraidsQuantizer ref;
+
+  Quantizer quant;
+
+  srand(0);
+  float pitch = rand_float();
+  float prev_pitch = 0.0f;
+  for (size_t ix = 0; ix < 4; ix++) {
+    ref.Init();
+    ref.Configure(scales[ix]);
+    quant.Init();
+    quant.Configure(scales[ix]);
+    float min = ref.Process(-1.0f);
+    float max = ref.Process(1.0f);
+
+    for (float delta_div = 1.0f; delta_div < 100000.0f; delta_div*=10.0f) {
+      for (size_t i = 0; i < 1e6; i++) {
+        pitch += (rand_float() - 0.5f) / delta_div;
+        CONSTRAIN(pitch, min, max);
+        float q = quant.Process(pitch);
+        float r = ref.Process(pitch);
+        if (q != r) {
+          printf("Quant %lu: Expected %f -> %f but got %f; prev pitch = %f; scale = %lu\n",
+                i, pitch, r, q, prev_pitch, ix);
+          return;
+        }
+        prev_pitch = q;
+      }
+    }
+  }
+}
+
+void TestTuringMachine() {
+  SegmentGeneratorTest t;
+
+  segment::Configuration configuration = { segment::TYPE_TURING, false };
+
+  t.generator()->Configure(true, &configuration, 1);
+  t.pulses()->AddPulses(8, 4, ::kSampleRate * 20 * 5);
+  t.set_segment_parameters(0, 0.5f, 1.0f);
+  t.Render("stages_tm_50.wav", ::kSampleRate);
+  t.set_segment_parameters(0, 0.25f, 1.0f);
+  t.Render("stages_tm_25.wav", ::kSampleRate);
+  t.set_segment_parameters(0, 0.05f, 1.0f);
+  t.Render("stages_tm_05.wav", ::kSampleRate);
+  t.set_segment_parameters(0, 0.0f, 1.0f);
+  t.Render("stages_tm_00.wav", ::kSampleRate);
+  t.set_segment_parameters(0, 0.5f, 1.0f);
+  configuration.quant_scale = 3;
+  t.generator()->Configure(true, &configuration, 1);
+  t.Render("stages_tm_50_quantized.wav", ::kSampleRate);
+}
+
+void TestQuantizeLinear() {
+  SegmentGeneratorTest t;
+
+  for (float i=0; i < 101; i++) {
+    float x = float(i) / 50.0f - 1.0f;
+    //printf("%f -> %f\n", x, 8.0f * t.generator()->QuantizeLinear(0, scales[3], x, 2));
+  }
+  for (float i=100; i >= 0; i--) {
+    float x = float(i) / 50.0f - 1.0f;
+    //printf("%f -> %f\n", x, 8.0f * t.generator()->QuantizeLinear(0, scales[3], x, 2));
+  }
+}
+
 int main(void) {
   TestADSR();
   TestTwoStepSequence();
@@ -316,6 +392,10 @@ int main(void) {
   TestWhiteNoise();
   TestBrownNoise();
   TestDelay();
+  TestSmallQuantizer();
+  TestTuringMachine();
+
+  //TestQuantizeLinear();
   //TestZero();
   // This segment type doesn't exist anymore
   //TestClockedSampleAndHold();
