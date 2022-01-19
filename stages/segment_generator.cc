@@ -389,6 +389,9 @@ void SegmentGenerator::ProcessSampleAndHold(
     const GateFlags* gate_flags, SegmentGenerator::Output* out, size_t size) {
   const float coefficient = PortamentoRateToLPCoefficient(
       parameters_[0].secondary);
+
+  // If quantizing, interpolation can cause holding the wrong value.
+  if (segments_[0].quant_scale > 0) primary_ = parameters_[0].primary;
   ParameterInterpolator primary(&primary_, parameters_[0].primary, size);
 
   while (size--) {
@@ -410,6 +413,9 @@ void SegmentGenerator::ProcessSampleAndHold(
 
 void SegmentGenerator::ProcessAttSampleAndHold(
     const GateFlags* gate_flags, SegmentGenerator::Output* out, size_t size) {
+
+  // If quantizing, interpolation can cause holding the wrong value.
+  if (segments_[0].quant_scale > 0) primary_ = parameters_[0].primary;
   ParameterInterpolator primary(&primary_, parameters_[0].primary, size);
 
   while (size--) {
