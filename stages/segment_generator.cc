@@ -1441,6 +1441,7 @@ void SegmentGenerator::Configure(
   sentinel->if_rising = 0;
   sentinel->if_falling = -1;
   sentinel->if_complete = loop_end == last_segment ? 0 : -1;
+  sentinel->retrig = true;
 
   // After changing the state of the module, we go to the sentinel.
   previous_segment_ = active_segment_ = num_segments;
