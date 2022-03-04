@@ -1109,9 +1109,14 @@ void SegmentGenerator::ProcessSequencer(
   int last_active = active_segment_;
   if (direction == DIRECTION_ADDRESSABLE) {
     reset_ = false;
-    active_segment_ = address_quantizer_.Process(
-        parameters_[0].primary, last_step_ - first_step_ + 1) + first_step_;
+    if (!hold_address_) {
+      active_segment_ =
+          address_quantizer_.Process(parameters_[0].primary,
+                                     last_step_ - first_step_ + 1) +
+          first_step_;
+    }
   } else {
+    hold_address_ = false;
     // Detect a rising edge on the slider/CV to reset to the first step.
     if (parameters_[0].primary > 0.125f && !reset_) {
       reset_ = true;
@@ -1128,12 +1133,18 @@ void SegmentGenerator::ProcessSequencer(
       --inhibit_clock_;
     }
 
-    bool clockable = !inhibit_clock_ && !reset_ && \
-        direction != DIRECTION_ADDRESSABLE;
+    bool clockable = !inhibit_clock_ && !reset_;
 
     // If a rising edge is detected on the gate input, advance to the next step.
     if ((*gate_flags & GATE_FLAG_RISING) && clockable) {
       switch (direction) {
+        case DIRECTION_ADDRESSABLE:
+          hold_address_ = true;
+          active_segment_ =
+              address_quantizer_.Process(parameters_[0].primary,
+                                         last_step_ - first_step_ + 1) +
+              first_step_;
+          break;
         case DIRECTION_UP:
           ++active_segment_;
           if (active_segment_ > last_step_) {
@@ -1196,7 +1207,6 @@ void SegmentGenerator::ProcessSequencer(
           }
           break;
 
-        case DIRECTION_ADDRESSABLE:
         case DIRECTION_LAST:
           break;
       }

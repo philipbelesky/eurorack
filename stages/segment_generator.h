@@ -322,6 +322,7 @@ class SegmentGenerator {
 
   int up_down_counter_;
   bool reset_;
+  bool hold_address_;
   int inhibit_clock_;
   stmlib::HysteresisQuantizer address_quantizer_;
   stmlib::HysteresisQuantizer step_quantizer_[kMaxNumSegments];
