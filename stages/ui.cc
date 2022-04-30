@@ -315,10 +315,12 @@ void Ui::UpdateLEDs() {
   leds_.Clear();
 
   MultiMode multimode = (MultiMode) settings_->state().multimode;
+  ChainState::ChainStateStatus status = chain_state_->status();
+  const uint32_t ms = system_clock.milliseconds();
 
   if (mode_ == UI_MODE_FACTORY_TEST) {
 
-    size_t counter = (system_clock.milliseconds() >> 8) % 3;
+    size_t counter = (ms >> 8) % 3;
     for (size_t i = 0; i < kNumChannels; ++i) {
       if (slider_led_counter_[i] == 0) {
         leds_.set(LED_GROUP_UI + i, palette_[counter]);
@@ -333,28 +335,11 @@ void Ui::UpdateLEDs() {
       }
     }
 
-  } else if (chain_state_->status() == ChainState::CHAIN_REINITIALIZING) {
-    show_mode();
-  } else if (chain_state_-> status() == ChainState::CHAIN_DISCOVERING_NEIGHBORS) {
-    size_t counter = system_clock.milliseconds() >> 5;
-    size_t n = chain_state_->size() * kNumChannels;
-    counter = counter % (2 * n - 2);
-    if (counter >= n) {
-      counter = 2 * n - 2 - counter;
-    }
-    if (counter >= chain_state_->index() * kNumChannels) {
-      counter -= chain_state_->index() * kNumChannels;
-      if (counter < kNumChannels) {
-        leds_.set(LED_GROUP_UI + counter, LED_COLOR_YELLOW);
-        leds_.set(LED_GROUP_SLIDER + counter, LED_COLOR_GREEN);
-      }
-    }
-    show_mode();
-  } else {
+  } else if (status == ChainState::CHAIN_READY) {
 
     // LEDs update for original Stage modes (Stages, advanced, slow LFO variant and Ouroboros)
     if (settings_->in_ouroboros_mode() || settings_->in_seg_gen_mode()) {
-      uint8_t pwm = system_clock.milliseconds() & 0xf;
+      uint8_t pwm = ms & 0xf;
       uint8_t fade_patterns[4] = {
         0xf,  // NONE
         FadePattern(4, 0),  // START
@@ -398,12 +383,12 @@ void Ui::UpdateLEDs() {
               || type == 2
               || (type == 3 && !self_loop))) {
             uint8_t scale = 3 - ((configuration >> 12) & 0x3);
-            color = (system_clock.milliseconds() >> 6) % 2 == 0
+            color = (ms >> 6) % 2 == 0
               ? palette_[scale] : LED_COLOR_OFF;
           } else if (type == 3) {
-            uint8_t proportion = (system_clock.milliseconds() >> 7) & 15;
+            uint8_t proportion = (ms >> 7) & 15;
             proportion = proportion > 7 ? 15 - proportion : proportion;
-            if ((system_clock.milliseconds() & 7) < proportion) {
+            if ((ms & 7) < proportion) {
               color = LED_COLOR_GREEN;
             } else {
               color = LED_COLOR_RED;
@@ -422,13 +407,13 @@ void Ui::UpdateLEDs() {
             // Not sure how to make it distinct.
           }
         }
-        uint32_t discrete_state_change_dur = system_clock.milliseconds() - discrete_change_time_[i];
+        uint32_t discrete_state_change_dur = ms - discrete_change_time_[i];
 
         if (settings_->in_seg_gen_mode()
             && is_bipolar(configuration)
             // the bipolar red blink makes it hard to see discrete state change indicator
             && discrete_state_change_dur > kDiscreteStateBrightDur
-            && ((system_clock.milliseconds() >> 8) % 4 == 0)) {
+            && ((ms >> 8) % 4 == 0)) {
           color = LED_COLOR_RED;
           brightness = 0x1;
         }
@@ -467,7 +452,6 @@ void Ui::UpdateLEDs() {
 
     }
 
-    uint32_t ms = system_clock.milliseconds();
     // For any multi-mode, update slider LEDs counters
     for (size_t i = 0; i < kNumChannels; ++i) {
       if (slider_led_counter_[i]) {
@@ -493,8 +477,24 @@ void Ui::UpdateLEDs() {
         }
       }
     }
+  } else if (chain_state_->status() == ChainState::CHAIN_REINITIALIZING) {
+    show_mode();
+  } else if (chain_state_-> status() == ChainState::CHAIN_DISCOVERING_NEIGHBORS) {
+    size_t counter = ms >> 5;
+    size_t n = chain_state_->size() * kNumChannels;
+    counter = counter % (2 * n - 2);
+    if (counter >= n) {
+      counter = 2 * n - 2 - counter;
+    }
+    if (counter >= chain_state_->index() * kNumChannels) {
+      counter -= chain_state_->index() * kNumChannels;
+      if (counter < kNumChannels) {
+        leds_.set(LED_GROUP_UI + counter, LED_COLOR_YELLOW);
+        leds_.set(LED_GROUP_SLIDER + counter, LED_COLOR_GREEN);
+      }
+    }
+    show_mode();
   }
-
   leds_.Write();
 
 }
