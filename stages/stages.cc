@@ -260,6 +260,13 @@ void ProcessOuroboros(IOBuffer::Block* block, size_t size) {
   float *blockHarmonic = alternate ? block->cv_slider : block->pot;
   float *blockAmplitude = alternate ? block->pot : block->cv_slider;
 
+  bool reset_all = false;
+  if (block->input_patched[0] && lfo) {
+    for (size_t i = 0; i < size; ++i) {
+      reset_all = reset_all || (block->input[0][i] & GATE_FLAG_RISING);
+    }
+  }
+
   for (int channel = kNumChannels - 1; channel >= 0; --channel) {
 
     const uint8_t r = (config[channel] >> 10) & 0x3;
@@ -290,8 +297,8 @@ void ProcessOuroboros(IOBuffer::Block* block, size_t size) {
     } else {
       channel_amplitude[channel] *= 0.999f;
     }
-    // For some reason, trigger can be true when not input is patched.
-    if (block->input_patched[channel] && trigger && lfo) {
+    // For some reason, trigger can be true when no input is patched.
+    if (lfo && (reset_all || (block->input_patched[channel] && trigger))) {
       oscillator[channel].Init();
     }
     ui.set_slider_led(
