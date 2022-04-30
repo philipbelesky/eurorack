@@ -10,7 +10,9 @@ COMMON_CC	   = ramp_extractor.cc \
 		segment_generator.cc \
 		resources.cc \
 		units.cc \
-		random.cc
+		random.cc \
+		quantizer.cc \
+		braids_quantizer.cc
 CC_FILES       = stages_test.cc $(COMMON_CC)
 PERF_CC_FILES  = stages_perf.cc $(COMMON_CC)
 OBJ_FILES      = $(CC_FILES:.cc=.o)
