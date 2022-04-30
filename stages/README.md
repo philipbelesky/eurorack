@@ -66,24 +66,24 @@ Control overview (modes in order of corresponding button; hold button for 5 seco
 | Alt harmonic osc | Shape    | Toggle shapes  | Freq (1) / harmony | Tune (1) / amp     | Freq range (1)  | -                  |
 
 Single segment types in segment generator modes (* = advanced mode; all other behaviors are unchanged from original Stages):
-| Segment type          | Behavior        | Slider + CV       | Pot         | Button + slider | Button + pot        |
-| ---                   | ---             | ---               | ---         | ---             | ---                 |
-| Green                 | Zero / R&F slew*| Fall time*        | Rise time*  | -               | Rectification*      |
-| Green looping         | LFO             | Freq              | Shape       | Freq range      | Polarity            |
-| Green gated           | Decay           | Time              | Shape       | Time range      | Re-trigger behavior |
-| Green gated, looping  | Clocked LFO     | Div/mul           | Shape       | Div/mul range   | Polarity            |
-| Yellow                | Slew            | Offset            | Time        | Quant scale     | Slider polarity     |
-| Yellow looping        | Slew / Atten*   | Offset            | Time / Att* | Quant scale     | Slider polarity     |
-| Yellow gated          | S&H             | Offset            | Slew        | Quant scale     | Slider polarity     |
-| Yellow gated, looping | S&H / Atten*    | Offset            | Time / Att* | Quant scale     | Slider polarity     |
-| Red                   | Delay           | Offset            | Time        | Quant scale     | Slider polarity     |
-| Red looping           | Delay           | Offset            | Time        | Quant scale     | Slider polarity     |
-| Red gated             | Timed pulse     | Offset            | Pulse width | Quant scale     | Slider polarity     |
-| Red gated, looping    | Gate generator  | Offset            | Probability | Quant scale     | Slider polarity     |
-| GR*                   | Uniform random  | Freq              | Slew        | Freq range      | Polarity            |
-| GR looping*           | Double scroll   | Freq              | Shape       | Freq range      | Polarity            |
-| GR gated*             | Turing machine  | Prob of bit flip  | Steps       | -               | Polarity            |
-| GR gated, looping*    | Logistic map    | Reproduction rate | Slew        | -               | Polarity            |
+| Segment type          | Behavior           | Slider + CV       | Pot         | Button + slider | Button + pot        |
+| ---                   | ---                | ---               | ---         | ---             | ---                 |
+| Green                 | Zero / R&F slew*   | Fall time*        | Rise time*  | -               | Rectification*      |
+| Green looping         | LFO                | Freq              | Shape       | Freq range      | Polarity            |
+| Green gated           | Decay              | Time              | Shape       | Time range      | Re-trigger behavior |
+| Green gated, looping  | Clocked LFO        | Div/mul           | Shape       | Div/mul range   | Polarity            |
+| Yellow                | Slew               | Offset            | Time        | Quant scale     | Slider polarity     |
+| Yellow looping        | Slew / Atten*      | Offset            | Time / Att* | Quant scale     | Slider polarity     |
+| Yellow gated          | S&H                | Offset            | Slew        | Quant scale     | Slider polarity     |
+| Yellow gated, looping | S&H / Atten*       | Offset            | Time / Att* | Quant scale     | Slider polarity     |
+| Red                   | Delay              | Offset            | Time        | Quant scale     | Slider polarity     |
+| Red looping           | Delay              | Offset            | Time        | Quant scale     | Slider polarity     |
+| Red gated             | Timed pulse        | Offset            | Pulse width | Quant scale     | Slider polarity     |
+| Red gated, looping    | Gate generator     | Offset            | Probability | Quant scale     | Slider polarity     |
+| GR*                   | Double scroll      | Freq              | Slew        | Freq range      | Polarity            |
+| GR looping*           | Random LFO         | Freq              | Smoothness  | Freq range      | Polarity            |
+| GR gated*             | Turing machine     | Prob of bit flip  | Steps       | -               | Polarity            |
+| GR gated, looping*    | Clocked random LFO | Reproduction rate | Smoothness  | Div/mul range   | Polarity            |
 
 Segment types in groups (only green~red and button+pot are different from original Stages):
 | Segment type | Behavior       | Slider + CV      | Pot   | Button + slider | Button + pot        |
