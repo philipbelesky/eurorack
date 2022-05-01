@@ -176,7 +176,6 @@ void Ui::Poll() {
                 seg_config[j] &= ~0x0c00;
               }
             }
-            break;
           }
         }
 
