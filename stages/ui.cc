@@ -109,8 +109,8 @@ void Ui::Poll() {
   // TODO: This is gross. Each mode should have its own UI handler, with a
   // generic system for changing segment properties that each can leverage.
   bool changing_prop = false;
-  if (pressed || changing_pot_prop_ || changing_slider_prop_ || cv_reader_->any_locked()) {
-    bool dirty = false;
+  if (pressed || changing_pot_prop_ || changing_slider_prop_ ||
+      cv_reader_->any_locked()) {
     uint16_t* seg_config = settings_->mutable_state()->segment_configuration;
     for (uint8_t i = 0; i < kNumChannels; ++i) {
       if (switches_.pressed(i)) {
@@ -193,7 +193,7 @@ void Ui::Poll() {
               break;
           }
         }
-        dirty = dirty || seg_config[i] != old_flags;
+        dirty_ = dirty_ || seg_config[i] != old_flags;
       } else if (cv_reader_->is_locked(i)) {
         changing_pot_prop_ &= ~(1 << i);
         changing_slider_prop_ &= ~(1 << i);
@@ -221,15 +221,15 @@ void Ui::Poll() {
         }
       }
     }
-    if (dirty) {
-      settings_->SaveState();
-    }
-
     changing_prop = changing_pot_prop_ || changing_slider_prop_;
     // We're changing prop parameters
     if (changing_prop) {
       chain_state_->SuspendSwitches();
     }
+  }
+  if (!pressed && dirty_) {
+    dirty_ = false;
+    settings_->SaveState();
   }
 
   if (settings_->in_ouroboros_mode()) {

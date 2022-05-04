@@ -118,6 +118,8 @@ class Ui {
   ChainState* chain_state_;
   CvReader* cv_reader_;
 
+  bool dirty_;
+
   UiMode mode_;
 
   static const MultiMode multimodes_[6];
