@@ -94,6 +94,9 @@ class ChainState {
     LOOP_STATUS_SELF
   };
 
+  inline bool input_patched(size_t i) const {
+    return (input_patched_[index_] >> i) & 1;
+  }
   inline LoopStatus loop_status(size_t i) const {
     return loop_status_[i];
   }

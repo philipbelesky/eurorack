@@ -135,7 +135,9 @@ void Ui::Poll() {
                 change_range = true;
                 break;
               case 3: // random
-                if (chain_state_->loop_status(i) == ChainState::LOOP_STATUS_SELF) {
+                if (chain_state_->loop_status(i) == ChainState::LOOP_STATUS_SELF
+                    || !chain_state_->input_patched(i)) {
+                  // Random LFO or chaotic
                   change_range = true;
                 } else {
                   change_scale = true;
