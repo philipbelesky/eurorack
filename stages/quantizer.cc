@@ -61,10 +61,10 @@ int16_t Quantizer::Process(int16_t pitch, int16_t root) {
         q = i;
       }
     }
-    if (abs(pitch - (octave + 1) * span_ + notes_[0]) < best_distance) {
+    if (abs(pitch - (octave + 1) * span_ - notes_[0]) < best_distance) {
       octave++;
       q = 0;
-    } else if (abs(pitch - (octave - 1) * span_ + notes_[num_notes_ - 1]) < best_distance) {
+    } else if (abs(pitch - (octave - 1) * span_ - notes_[num_notes_ - 1]) <= best_distance) {
       octave--;
       q = num_notes_ - 1;
     }

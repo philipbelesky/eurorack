@@ -312,13 +312,31 @@ void TestSmallQuantizer() {
   Quantizer quant;
 
   srand(0);
-  float pitch = rand_float();
-  float prev_pitch = 0.0f;
-  for (size_t ix = 0; ix < 4; ix++) {
+  int16_t prev_pitch = 0;
+  int passed = 0;
+  for (size_t ix = 0; ix < 6; ix++) {
     ref.Init();
     ref.Configure(scales[ix]);
     quant.Init();
     quant.Configure(scales[ix]);
+    int16_t min = ref.Process(int32_t(-stages::eight_octaves));
+    int16_t max = ref.Process(int32_t(stages::eight_octaves));
+    for (int16_t step_size = -12 << 8; step_size < 12 << 8; step_size++) {
+      if (step_size == 0) continue;
+      for (int16_t i = step_size < 0 ? max : min; i <= max && i >= min; i+=step_size) {
+        int16_t q = quant.Process(i);
+        int16_t r = ref.Process(i);
+        prev_pitch = q;
+        if (q != r) {
+          printf("Quant %d: Expected %d -> %d but got %d; prev pitch = %d; "
+                 "scale = %lu\n",
+                 i, i, r, q, prev_pitch, ix);
+          return;
+        }
+        passed++;
+      }
+    }
+    /*
     float min = ref.Process(-1.0f);
     float max = ref.Process(1.0f);
 
@@ -336,7 +354,9 @@ void TestSmallQuantizer() {
         prev_pitch = q;
       }
     }
+    */
   }
+  printf("Passed %d quantization tests.\n", passed);
 }
 
 void TestTuringMachine() {
@@ -374,6 +394,7 @@ void TestQuantizeLinear() {
 }
 
 int main(void) {
+  /*
   TestADSR();
   TestTwoStepSequence();
   TestSingleDecay();
@@ -392,8 +413,9 @@ int main(void) {
   TestWhiteNoise();
   TestBrownNoise();
   TestDelay();
+  */
   TestSmallQuantizer();
-  TestTuringMachine();
+  //TestTuringMachine();
 
   //TestQuantizeLinear();
   //TestZero();

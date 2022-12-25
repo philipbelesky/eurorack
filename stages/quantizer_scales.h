@@ -42,6 +42,10 @@ const Scale scales[] = {
   { 12 << 7, 7, { 0, 256, 512, 640, 896, 1152, 1408} },
   // Pentatonic major (From midipal/BitT source code)
   { 12 << 7, 5, { 0, 256, 512, 896, 1152} },
+
+  // Just here for testing
+  { 12 << 7, 2, { 128, 256 } },
+  { 12 << 7, 2, { 1152, 1408 }}
 };
 
 }  // namespace stages
