@@ -108,7 +108,8 @@ class PulseGenerator {
 class SegmentGeneratorTest {
  public:
    SegmentGeneratorTest() {
-    segment_generator_.Init(MULTI_MODE_STAGES_ADVANCED);
+    note_quantizer.Init(13, 0.03f, false);
+    segment_generator_.Init(MULTI_MODE_STAGES_ADVANCED, &note_quantizer);
   }
   ~SegmentGeneratorTest() { }
 
@@ -164,6 +165,7 @@ class SegmentGeneratorTest {
   SegmentGenerator segment_generator_;
   PulseGenerator pulse_generator_;
   vector<SegmentParameters> segment_parameters_;
+  HysteresisQuantizer2 note_quantizer;
 
   DISALLOW_COPY_AND_ASSIGN(SegmentGeneratorTest);
 };

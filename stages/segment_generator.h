@@ -33,12 +33,15 @@
 #include "stmlib/dsp/hysteresis_quantizer.h"
 #include "stmlib/utils/gate_flags.h"
 
+#include "tides2/ramp/ramp_extractor.h"
 #include "stages/delay_line_16_bits.h"
 
-#include "stages/ramp_extractor.h"
 #include "stages/modes.h"
 #include "stmlib/utils/random.h"
 #include "stages/quantizer.h"
+#include "stages/oscillator.h"
+#include "stages/variable_shape_oscillator.h"
+#include "stages/modes.h"
 
 namespace stages {
 
@@ -51,7 +54,7 @@ const float kSampleRate = 31250.0f;
 const int kMaxNumSegments = 36;
 const int kMaxNumLocalSegments = 6;
 
-const size_t kMaxDelay = 768;
+const size_t kMaxDelay = 576;
 
 #define DECLARE_PROCESS_FN(X) void Process ## X \
       (const stmlib::GateFlags* gate_flags, Output* out, size_t size);
@@ -136,9 +139,13 @@ class SegmentGenerator {
     float register_value;
     size_t tm_steps;
   };
-
-  void Init(MultiMode multimode);
-
+  
+  void Init() {
+    Init(MULTI_MODE_STAGES, NULL);
+  }
+  
+  void Init(MultiMode multimode, stmlib::HysteresisQuantizer2* step_quantizer);
+  
   typedef void (SegmentGenerator::*ProcessFn)(
       const stmlib::GateFlags* gate_flags, Output* out, size_t size);
 
@@ -246,6 +253,8 @@ class SegmentGenerator {
   DECLARE_PROCESS_FN(TrackAndHold);
   DECLARE_PROCESS_FN(TapLFO);
   DECLARE_PROCESS_FN(FreeRunningLFO);
+  DECLARE_PROCESS_FN(PLLOscillator);
+  DECLARE_PROCESS_FN(FreeRunningOscillator);
   DECLARE_PROCESS_FN(Delay);
   DECLARE_PROCESS_FN(AttOff);
   DECLARE_PROCESS_FN(AttSampleAndHold);
@@ -260,8 +269,13 @@ class SegmentGenerator {
   DECLARE_PROCESS_FN(ClockedSampleAndHold);
   DECLARE_PROCESS_FN(Slave);
 
-  void ShapeLFO(float shape, Output* in_out, size_t size, bool bipolar);
   void ProcessRandomFromPhase(float smoothness, Output* in_out, size_t size);
+
+  void ProcessOscillator(bool audio_rate, const stmlib::GateFlags* gate_flags,
+      Output* out,size_t size);
+
+  static void ShapeLFO(float shape, const float *phase, Output *out,
+                       size_t size, bool bipolar);
   float WarpPhase(float t, float curve) const;
   float RateToFrequency(float rate) const;
   float PortamentoRateToLPCoefficient(float rate) const;
@@ -291,9 +305,8 @@ class SegmentGenerator {
 
   ProcessFn process_fn_;
 
-  RampExtractor ramp_extractor_;
-
-  stmlib::HysteresisQuantizer function_quantizer_;
+  tides::RampExtractor ramp_extractor_;
+  stmlib::HysteresisQuantizer2 function_quantizer_;
 
   Segment segments_[kMaxNumSegments + 1];  // There's a sentinel!
   segment::Parameters parameters_[kMaxNumSegments];
@@ -322,14 +335,18 @@ class SegmentGenerator {
 
   int up_down_counter_;
   bool reset_;
+
+  bool accepted_gate_;
   bool hold_address_;
   int inhibit_clock_;
-  stmlib::HysteresisQuantizer address_quantizer_;
-  stmlib::HysteresisQuantizer step_quantizer_[kMaxNumSegments];
+  stmlib::HysteresisQuantizer2 address_quantizer_;
+  stmlib::HysteresisQuantizer2* step_quantizer_;
 
   float x_;
   float y_;
   float z_;
+
+  VariableShapeOscillator audio_osc_;
 
   DISALLOW_COPY_AND_ASSIGN(SegmentGenerator);
 };

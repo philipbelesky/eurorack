@@ -1,4 +1,4 @@
-PACKAGES       = stages/test stmlib/utils stages stages/ramp stmlib/dsp
+PACKAGES       = stages/test stmlib/utils stages stmlib/dsp tides2/ramp
 
 VPATH          = $(PACKAGES)
 
@@ -6,8 +6,9 @@ TARGET         = stages_test
 PERF_TARGET    = stages_perf
 BUILD_ROOT     = build/
 BUILD_DIR      = $(BUILD_ROOT)$(TARGET)/
-COMMON_CC	   = ramp_extractor.cc \
-		segment_generator.cc \
+COMMON_CC	   = \
+		ramp_extractor.cc \
+    segment_generator.cc \
 		resources.cc \
 		units.cc \
 		random.cc \

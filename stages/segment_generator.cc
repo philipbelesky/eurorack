@@ -38,6 +38,7 @@
 #include <cassert>
 #include <cmath>
 #include <algorithm>
+// #include <cstdio>
 
 #include "stages/resources.h"
 #include "stmlib/stmlib.h"
@@ -61,7 +62,7 @@ const size_t kSampleAndHoldDelay = kSampleRate * 2 / 1000;
 // Clock inhibition following a rising edge on the RESET input
 const size_t kClockInhibitDelay = kSampleRate * 5 / 1000;
 
-void SegmentGenerator::Init(MultiMode multimode) {
+void SegmentGenerator::Init(MultiMode multimode, stmlib::HysteresisQuantizer2* step_quantizer) {
   process_fn_ = &SegmentGenerator::ProcessMultiSegment;
 
   multimode_ = multimode;
@@ -80,6 +81,7 @@ void SegmentGenerator::Init(MultiMode multimode) {
 
   monitored_segment_ = 0;
   active_segment_ = 0;
+  previous_segment_ = 0;
   retrig_delay_ = 0;
   primary_ = 0;
 
@@ -106,13 +108,15 @@ void SegmentGenerator::Init(MultiMode multimode) {
   p.secondary = 0.0f;
   fill(&parameters_[0], &parameters_[kMaxNumSegments], p);
 
-  ramp_extractor_.Init(kSampleRate, kMaxFrequency);
+  ramp_extractor_.Init(
+      kSampleRate,
+      1000.0f / kSampleRate);
+
   delay_line_.Init();
   gate_delay_.Init();
 
-  function_quantizer_.Init();
-
-  address_quantizer_.Init();
+  function_quantizer_.Init(2, 0.025f, false);
+  address_quantizer_.Init(2, 0.025f, false);
 
   num_segments_ = 0;
 
@@ -126,10 +130,10 @@ void SegmentGenerator::Init(MultiMode multimode) {
   quantized_output_ = false;
   up_down_counter_ = inhibit_clock_ = 0;
   reset_ = false;
+  accepted_gate_ = true;
+  step_quantizer_ = step_quantizer;
 
-  for (int i = 0; i < kMaxNumSegments; ++i) {
-    step_quantizer_[i].Init();
-  }
+  audio_osc_.Init();
 }
 
 inline float SegmentGenerator::WarpPhase(float t, float curve) const {
@@ -185,6 +189,9 @@ static void advance_tm(
   }
 }
 
+// Seems popular enough :)
+#define TRACK_PREVIOUS_SEGMENT
+
 void SegmentGenerator::ProcessMultiSegment(
     const GateFlags* gate_flags, SegmentGenerator::Output* out, size_t size) {
   float phase = phase_;
@@ -194,15 +201,14 @@ void SegmentGenerator::ProcessMultiSegment(
 
   while (size--) {
     const Segment& segment = segments_[active_segment_];
-    const Segment& previous = segments_[previous_segment_];
 
+#ifdef TRACK_PREVIOUS_SEGMENT
+    const Segment& previous = segments_[previous_segment_];
     // Having phase means segment is trackable
     // If previous.start == previous.end and segment.end = previous.start we
     // can end up with start and end tracking the same value, which would do
     // nothing.
     if (!segment.start && previous.phase && segment.end != previous.end) {
-
-
       // Just setting start to the previous segment's end would cause a jump
       // when, e.g., going from a slewed step to a ramp before the step
       // finishes. In the case where the current segment does not have a start
@@ -213,6 +219,7 @@ void SegmentGenerator::ProcessMultiSegment(
           *previous.end,
           PortamentoRateToLPCoefficient(*previous.portamento));
     }
+#endif  // TRACK_PREVIOUS_SEGMENT
 
     if (segment.time) {
       phase += RateToFrequency(*segment.time);
@@ -353,7 +360,10 @@ void SegmentGenerator::ProcessGateGenerator(
     const GateFlags* gate_flags, SegmentGenerator::Output* out, size_t size) {
   ParameterInterpolator primary(&primary_, parameters_[0].primary, size);
   while (size--) {
-    active_segment_ = *gate_flags & GATE_FLAG_HIGH ? 0 : 1;
+    if (*gate_flags & GATE_FLAG_RISING) {
+      accepted_gate_ = Random::GetFloat() < parameters_[0].secondary * 1.01f;
+    }
+    active_segment_ = (*gate_flags & GATE_FLAG_HIGH) && accepted_gate_ ? 0 : 1;
 
     const float p = primary.Next();
     lp_ = value_ = active_segment_ == 0 ? p : 0.0f;
@@ -479,13 +489,13 @@ void SegmentGenerator::ProcessClockedSampleAndHold(
   }
 }
 
-inline Ratio calc_ratio(int n, int d) {
+inline tides::Ratio calc_ratio(int n, int d) {
   // I honestly don't know why the - 1e-06f is here. I just noticed that all
   // the original ratios were that much lower than expected.
-  return (Ratio) { float(n) / float(d) - 1e-06f, d };
+  return (tides::Ratio) { float(n) / float(d) - 1e-06f, d };
 }
 
-const Ratio divider_ratios[] = {
+const tides::Ratio divider_ratios[] = {
   calc_ratio(1, 32), // slow start: 0
   calc_ratio(1, 16),
   calc_ratio(1, 8),
@@ -512,67 +522,115 @@ const uint8_t num_divider_ratios[] = {7, 10, 10};
 
 void SegmentGenerator::ProcessTapLFO(
     const GateFlags* gate_flags, SegmentGenerator::Output* out, size_t size) {
-  float ramp[12];
-  uint8_t range = segments_[0].range;
-  Ratio r = function_quantizer_.Lookup(
-    divider_ratios + divider_ratios_start[range],
-    parameters_[0].primary * 1.03f,
-    num_divider_ratios[range]
-  );
-
-/*
-  Ratio slider_r = base_ratio_quantizer_.Lookup(
-    divider_ratios + divider_ratios_start[range],
-    local_parameters_[0].slider * 1.03f,
-    num_divider_ratios[range]
-  );
-  if (slider_r.ratio != last_slider_ratio) {
-    last_slider_ratio = slider_r.ratio;
-    out->discrete_state |= 1;
-  }
-  */
-
-  ramp_extractor_.Process(r, gate_flags, ramp, size);
-  for (size_t i = 0; i < size; ++i) {
-    out[i].phase = ramp[i];
-  }
-  ShapeLFO(parameters_[0].secondary, out, size, segments_[0].bipolar);
-  active_segment_ = out[size - 1].segment;
+  ProcessOscillator(false, gate_flags, out, size);
 }
 
 void SegmentGenerator::ProcessFreeRunningLFO(
     const GateFlags* gate_flags, SegmentGenerator::Output* out, size_t size) {
-  float f = 96.0f * (parameters_[0].primary - 0.5f);
-  CONSTRAIN(f, -128.0f, 127.0f);
+  ProcessOscillator(false, NULL, out, size);
+}
 
-  float frequency = SemitonesToRatio(f) * 2.0439497f / kSampleRate;
+void SegmentGenerator::ProcessPLLOscillator(
+    const GateFlags* gate_flags, SegmentGenerator::Output* out, size_t size) {
+  ProcessOscillator(true, gate_flags, out, size);
+}
 
-  active_segment_ = 0;
-  switch (segments_[active_segment_].range) {
-    case segment::RANGE_SLOW:
-      frequency /= 16.0f;
-      break;
-    case segment::RANGE_FAST:
-      frequency *= 64.0f;
-      break;
-    default:
-      // It's good where it is
-      break;
+void SegmentGenerator::ProcessFreeRunningOscillator(
+    const GateFlags* gate_flags, SegmentGenerator::Output* out, size_t size) {
+  ProcessOscillator(true, NULL, out, size);
+}
+
+inline float Log2Fast(float x) {
+  union {
+    float f;
+    int32_t w;
+  } r;
+  r.f = x;
+  float log2f = (float)(((r.w >> 23) & 255) - 128);
+  r.w  &= ~(255 << 23);
+  r.w  += 127 << 23;
+  log2f += ((-0.34484843f) * r.f + 2.02466578f) * r.f - 0.67487759f;
+  return log2f;
+}
+
+void SegmentGenerator::ProcessOscillator(
+    bool audio_rate,
+    const GateFlags* gate_flags,
+    SegmentGenerator::Output* out,
+    size_t size) {
+
+  float frequency = 0.0f;
+  const float root_note = audio_rate ? 261.6255616f : 2.0439497f;
+  float ramp[size];
+
+  tides::Ratio r = { 1.0f, 1 };
+  FreqRange range = segments_[0].range;
+  if (gate_flags) {
+    r = function_quantizer_.Lookup(
+        divider_ratios + divider_ratios_start[range],
+        parameters_[0].primary * 1.03f);
+    frequency = ramp_extractor_.Process(
+        audio_rate, false, r, gate_flags, ramp, size);
+  } else {
+    float f = 96.0f * (parameters_[0].primary - 0.5f);
+    CONSTRAIN(f, -128.0f, 127.0f);
+    frequency = SemitonesToRatio(f) * root_note / kSampleRate;
+    // printf("%d %f %f %f ", range, parameters_[0].primary, f, frequency);
+    switch (range) {
+      case segment::RANGE_SLOW:
+        frequency /= 16.0f;
+        break;
+      case segment::RANGE_FAST:
+        frequency *= 64.0f;
+        break;
+      default:
+        // It's good where it is
+        break;
+    }
+    // printf("%f\n", frequency);
   }
 
-  if (multimode_ == MULTI_MODE_STAGES_SLOW_LFO) {
-    frequency /= 8.0f;
-  }
-  CONSTRAIN(frequency, 0.0f, kMaxFrequency);
+  if (range == segment::RANGE_FAST && segments_[0].bipolar) {
+    audio_osc_.Render(frequency, parameters_[0].secondary, ramp, size);
 
-  for (size_t i = 0; i < size; ++i) {
-    phase_ += frequency;
+    // Blinking rate follows the distance to the nearest C.
+    float distance_to_c = frequency <= 0.0f
+        ? 0.5f
+        : Log2Fast(frequency / r.ratio * kSampleRate / root_note);
+
+    // Wrap to [-0.5, 0.5]
+    MAKE_INTEGRAL_FRACTIONAL(distance_to_c);
+    if (distance_to_c_fractional < -0.5f) {
+      distance_to_c_fractional += 1.0f;
+    } else if (distance_to_c_fractional > 0.5f) {
+      distance_to_c_fractional -= 1.0f;
+    }
+    float d = std::min(2.0f * fabsf(distance_to_c_fractional), 1.0f);
+
+    // Blink f between 0.125 Hz and 16 Hz depending on distance to C.
+    const float blink_frequency = float(size) * \
+        (16.0f * d * (2.0f - d) + 0.125f) / kSampleRate;
+    phase_ += blink_frequency;
     if (phase_ >= 1.0f) {
       phase_ -= 1.0f;
     }
-    out[i].phase = phase_;
+    for (size_t i = 0; i < size; ++i) {
+      out[i].phase = ramp[i] * 2.0f - 1.0f;
+      out[i].value = ramp[i] * 5.0f / 8.0f;
+      out[i].segment = phase_ < 0.5f ? 0 : 1;
+    }
+  } else {
+    if (!gate_flags) {
+      for (size_t i = 0; i < size; ++i) {
+        phase_ += frequency;
+        if (phase_ >= 1.0f) {
+          phase_ -= 1.0f;
+        }
+        ramp[i] = phase_;
+      }
+    }
+    ShapeLFO(parameters_[0].secondary, ramp, out, size, segments_[0].bipolar);
   }
-  ShapeLFO(parameters_[0].secondary, out, size, segments_[0].bipolar);
   active_segment_ = out[size - 1].segment;
 }
 
@@ -751,13 +809,11 @@ void SegmentGenerator::ProcessTapRandomLFO(
   float ramp[12];
   uint8_t range = segments_[0].range;
 
-  Ratio r = function_quantizer_.Lookup(
-    divider_ratios + divider_ratios_start[range],
-    parameters_[0].primary * 1.03f,
-    num_divider_ratios[range]
-  );
+  tides::Ratio r =
+      function_quantizer_.Lookup(divider_ratios + divider_ratios_start[range],
+                                 parameters_[0].primary * 1.03f);
 
-  ramp_extractor_.Process(r, gate_flags, ramp, size);
+  ramp_extractor_.Process( false, false, r, gate_flags, ramp, size);
   for (size_t i = 0; i < size; ++i) {
     out[i].phase = ramp[i];
   }
@@ -1057,7 +1113,8 @@ void SegmentGenerator::ProcessSlave(
 /* static */
 void SegmentGenerator::ShapeLFO(
     float shape,
-    SegmentGenerator::Output* in_out,
+    const float* input_phase,
+    SegmentGenerator::Output* out,
     size_t size,
     bool bipolar) {
   shape -= 0.5f;
@@ -1077,7 +1134,7 @@ void SegmentGenerator::ShapeLFO(
   const float amplitude = bipolar ? (10.0f / 16.0f) : 0.5f;
   const float offset = bipolar ? 0.0f : 0.5f;
   while (size--) {
-    float phase = in_out->phase + phase_shift;
+    float phase = *input_phase + phase_shift;
     if (phase > 1.0f) {
       phase -= 1.0f;
     }
@@ -1087,10 +1144,13 @@ void SegmentGenerator::ShapeLFO(
     triangle -= 0.5f;
     CONSTRAIN(triangle, -plateau, plateau);
     triangle = triangle * normalization;
-    float sine = Interpolate(lut_sine, phase < 0.25f ? phase + 0.75f : phase - 0.25f, 1024.0f);
-    in_out->value = amplitude * Crossfade(triangle, sine, sine_amount) + offset;
-    in_out->segment = phase < 0.5f ? 0 : 1;
-    ++in_out;
+    //float sine = Interpolate(lut_sine, phase < 0.25f ? phase + 0.75f : phase - 0.25f, 1024.0f);
+    float sine = InterpolateWrap(lut_sine, phase + 0.75f, 1024.0f);
+    out->phase = *input_phase;
+    out->value = amplitude * Crossfade(triangle, sine, sine_amount) + offset;
+    out->segment = phase < 0.5f ? 0 : 1;
+    ++out;
+    ++input_phase;
   }
 }
 
@@ -1104,16 +1164,14 @@ void SegmentGenerator::ProcessSequencer(
     const GateFlags* gate_flags, SegmentGenerator::Output* out, size_t size) {
   // Read the value of the small pot to determine the direction.
   Direction direction = Direction(function_quantizer_.Process(
-      parameters_[0].secondary, DIRECTION_LAST));
+      parameters_[0].secondary));
 
   int last_active = active_segment_;
   if (direction == DIRECTION_ADDRESSABLE) {
     reset_ = false;
     if (!hold_address_) {
       active_segment_ =
-          address_quantizer_.Process(parameters_[0].primary,
-                                     last_step_ - first_step_ + 1) +
-          first_step_;
+          address_quantizer_.Process(parameters_[0].primary) + first_step_;
     }
   } else {
     hold_address_ = false;
@@ -1218,7 +1276,7 @@ void SegmentGenerator::ProcessSequencer(
     if (quantized_output_) {
       bool neg = value_ < 0;
       value_ = abs(value_);
-      int note = step_quantizer_[active_segment_].Process(value_, 13);
+      int note = step_quantizer_[active_segment_].Process(value_);
       value_ = static_cast<float>(neg ? -note : note) / 96.0f;
     }
     if ((last_active != active_segment_) && segments_[last_active].advance_tm) {
@@ -1272,8 +1330,15 @@ void SegmentGenerator::ConfigureSequencer(
     last_step_ = num_segments - 1;
   }
 
+  int num_steps = last_step_ - first_step_ + 1;
+  address_quantizer_.Init(
+      num_steps,
+      0.02f / 8.0f * static_cast<float>(num_steps),
+      false);
+
   inhibit_clock_ = up_down_counter_ = 0;
-  quantized_output_ = segment_configuration[0].type == TYPE_RAMP;
+  quantized_output_ = (segment_configuration[0].type == TYPE_RAMP) && \
+      step_quantizer_;
   reset_ = false;
   lp_ = value_ = 0.0f;
   active_segment_ = first_step_;
@@ -1285,6 +1350,8 @@ void SegmentGenerator::Configure(
     const Configuration* segment_configuration,
     int num_segments) {
   if (num_segments == 1) {
+    function_quantizer_.Init(num_divider_ratios[segment_configuration[0].range],
+                             0.025f, false);
     ConfigureSingleSegment(has_trigger, segment_configuration[0]);
     return;
   }
@@ -1296,6 +1363,7 @@ void SegmentGenerator::Configure(
     sequencer_mode = sequencer_mode && is_step(segment_configuration[i]);
   }
   if (sequencer_mode) {
+    function_quantizer_.Init(DIRECTION_LAST, 0.025f, false);
     ConfigureSequencer(segment_configuration, num_segments);
     return;
   }
