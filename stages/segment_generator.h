@@ -200,7 +200,11 @@ class SegmentGenerator {
 
   // -1.0f -> -octaves (in pitch) and 1.0f -> octaves (in pitch)
   float QuantizeLinear(int seg, const Scale& scale, float value, int octaves) {
-    int ix = step_quantizer_[seg].Process((value + 1.0f) / 2.0f, 2 * octaves * scale.num_notes + 1);
+    int num_steps = 2 * octaves * scale.num_notes + 1;
+    if (step_quantizer_[seg].num_steps() != num_steps) {
+      step_quantizer_[seg].Init(num_steps, 0.03f, false);
+    }
+    int ix = step_quantizer_[seg].Process((value + 1.0f) / 2.0f);
     int16_t pitch = scale.notes[ix % scale.num_notes] + (ix / scale.num_notes) * scale.span;
     pitch -= octaves * scale.span;
     return static_cast<float>(pitch) / eight_octaves;

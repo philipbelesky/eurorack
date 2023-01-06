@@ -1274,10 +1274,7 @@ void SegmentGenerator::ProcessSequencer(
       segments_[active_segment_].register_value
       : parameters_[active_segment_].primary;
     if (quantized_output_) {
-      bool neg = value_ < 0;
-      value_ = abs(value_);
-      int note = step_quantizer_[active_segment_].Process(value_);
-      value_ = static_cast<float>(neg ? -note : note) / 96.0f;
+      value_ = QuantizeLinear(active_segment_, scales[1], value_, 1);
     }
     if ((last_active != active_segment_) && segments_[last_active].advance_tm) {
       const float steps_param = parameters_[last_active].secondary;
